@@ -2,6 +2,57 @@ import { NextRequest, NextResponse } from 'next/server'
 import { productionOrders, productionComponents, productionWorkers, products, warehouses, stock } from '@/lib/data'
 import type { ErpProductionOrder, ErpProductionComponent } from '@/types/database'
 
+// DELETE /api/production — delete a production order, reverse stock if completed
+export async function DELETE(request: NextRequest) {
+  try {
+    const { id } = await request.json()
+    if (!id) {
+      return NextResponse.json({ error: 'id e obrigatorio.' }, { status: 400 })
+    }
+
+    const orderIndex = productionOrders.findIndex((o) => o.id === id)
+    if (orderIndex === -1) {
+      return NextResponse.json({ error: 'Ordem nao encontrada.' }, { status: 404 })
+    }
+
+    const order = productionOrders[orderIndex]
+
+    // If completed, reverse stock adjustments
+    if (order.status === 'completed') {
+      const productStockEntry = stock.find(
+        (s) => s.product_id === order.product_id && s.warehouse_id === order.warehouse_id && s.variation_id === null
+      )
+      if (productStockEntry) {
+        productStockEntry.quantity = Math.max(0, productStockEntry.quantity - order.quantity_produced)
+      }
+
+      const orderComponents = productionComponents.filter((pc) => pc.production_id === order.id)
+      for (const comp of orderComponents) {
+        const compStock = stock.find(
+          (s) => s.product_id === comp.component_id && s.warehouse_id === order.warehouse_id && s.variation_id === null
+        )
+        if (compStock) {
+          compStock.quantity += comp.consumed_qty
+        }
+      }
+    }
+
+    // Remove associated components
+    for (let i = productionComponents.length - 1; i >= 0; i--) {
+      if (productionComponents[i].production_id === order.id) {
+        productionComponents.splice(i, 1)
+      }
+    }
+
+    // Remove order
+    productionOrders.splice(orderIndex, 1)
+
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Erro ao processar.' }, { status: 500 })
+  }
+}
+
 // GET /api/production — list production orders enriched with component names and worker names
 export async function GET() {
   // Sort by order_number descending (newest first)

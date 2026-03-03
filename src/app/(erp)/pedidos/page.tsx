@@ -41,6 +41,8 @@ interface OrderWithRelations {
   contact_id: string
   salesperson_id: string | null
   company_id: string | null
+  sales_channel: 'b2b' | 'b2c' | null
+  store_name: string | null
   contact?: { name: string }
   salesperson?: { name: string }
   company?: { trade_name: string | null; name: string }
@@ -63,11 +65,12 @@ export default function PedidosPage() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [companyFilter, setCompanyFilter] = useState<string>('all')
+  const [channelFilter, setChannelFilter] = useState<string>('all')
 
   useEffect(() => {
     fetch('/api/sales-orders')
       .then((res) => res.json())
-      .then((json) => setOrders(Array.isArray(json) ? json : []))
+      .then((json) => setOrders(json.data ?? (Array.isArray(json) ? json : [])))
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
@@ -91,9 +94,12 @@ export default function PedidosPage() {
     if (companyFilter !== 'all') {
       result = result.filter((o) => o.company_id === companyFilter)
     }
+    if (channelFilter !== 'all') {
+      result = result.filter((o) => o.sales_channel === channelFilter)
+    }
 
     return result
-  }, [orders, statusFilter, companyFilter])
+  }, [orders, statusFilter, companyFilter, channelFilter])
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: orders.length }
@@ -153,25 +159,40 @@ export default function PedidosPage() {
         })}
       </div>
 
-      {/* Company filter */}
-      {companies.length > 0 && (
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Empresa:</span>
-          <Select value={companyFilter} onValueChange={setCompanyFilter}>
-            <SelectTrigger className="w-[250px]">
-              <SelectValue placeholder="Todas as empresas" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as empresas</SelectItem>
-              {companies.map(([id, name]) => (
-                <SelectItem key={id} value={id}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* Channel + Company filters */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Canal:</span>
+          {(['all', 'b2b', 'b2c'] as const).map((ch) => (
+            <Button
+              key={ch}
+              variant={channelFilter === ch ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setChannelFilter(ch)}
+            >
+              {ch === 'all' ? 'Todos' : ch.toUpperCase()}
+            </Button>
+          ))}
         </div>
-      )}
+        {companies.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Empresa:</span>
+            <Select value={companyFilter} onValueChange={setCompanyFilter}>
+              <SelectTrigger className="w-full sm:w-[250px]">
+                <SelectValue placeholder="Todas as empresas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as empresas</SelectItem>
+                {companies.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
 
       {/* Orders table */}
       {loading ? (
@@ -202,6 +223,7 @@ export default function PedidosPage() {
                 <TableRow>
                   <TableHead>#Numero</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Canal</TableHead>
                   <TableHead>Empresa</TableHead>
                   <TableHead>Vendedor</TableHead>
                   <TableHead className="text-right">Total</TableHead>
@@ -216,6 +238,14 @@ export default function PedidosPage() {
                       #{order.order_number}
                     </TableCell>
                     <TableCell>{order.contact?.name ?? '-'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {order.sales_channel === 'b2c' ? 'B2C' : 'B2B'}
+                      </Badge>
+                      {order.store_name && (
+                        <div className="text-xs text-muted-foreground mt-0.5">{order.store_name}</div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {order.company?.trade_name || order.company?.name || '-'}
                     </TableCell>

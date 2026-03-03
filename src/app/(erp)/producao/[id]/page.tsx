@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,7 @@ import {
   Users,
   Pencil,
   Save,
+  Trash2,
 } from 'lucide-react'
 import type { ErpProductionStatus } from '@/types/database'
 
@@ -100,6 +102,7 @@ export default function ProductionDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = React.use(params)
+  const router = useRouter()
   const [order, setOrder] = useState<ProductionOrderEnriched | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -125,6 +128,32 @@ export default function ProductionDetailPage({
   const [editQuantityLost, setEditQuantityLost] = useState(0)
   const [availableWorkers, setAvailableWorkers] = useState<AvailableWorker[]>([])
   const [editLoading, setEditLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  async function handleDelete() {
+    if (!order) return
+    const warning = order.status === 'completed'
+      ? 'Esta ordem esta concluida. Excluir ira reverter os ajustes de estoque. Deseja continuar?'
+      : 'Tem certeza que deseja excluir esta ordem de producao?'
+    if (!window.confirm(warning)) return
+    setDeleteLoading(true)
+    try {
+      const res = await fetch('/api/production', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: order.id }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Erro ao excluir')
+      }
+      router.push('/producao')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao excluir')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
 
   const fetchOrder = useCallback(() => {
     setLoading(true)
@@ -778,6 +807,22 @@ export default function ProductionDetailPage({
                 rows={3}
               />
             </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={handleDelete}
+              disabled={deleteLoading || editLoading}
+            >
+              {deleteLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Excluir Ordem
+            </Button>
           </div>
 
           <DialogFooter>

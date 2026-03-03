@@ -144,6 +144,8 @@ export async function POST(request: NextRequest) {
       store_order_id: null,
       pagarme_id: null,
       melhorenvio_id: null,
+      sales_channel: body.sales_channel ?? null,
+      store_name: body.store_name ?? null,
       notes: body.notes ?? null,
       attachments: Array.isArray(body.attachments) ? body.attachments : [],
       internal_notes: null,

@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/table'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatDocument, formatDate, formatBRL, PAYMENT_METHOD_LABELS } from '@/lib/constants'
-import type { ErpCompany, ErpUserProfile, ErpUserRole, ErpProductionWorker, ErpSalesperson } from '@/types/database'
+import type { ErpCompany, ErpUserProfile, ErpUserRole, ErpProductionWorker, ErpSalesperson, ErpWarehouse } from '@/types/database'
 import {
   Building2,
   CreditCard,
@@ -54,6 +54,7 @@ import {
   ClipboardList,
   HardHat,
   UserCheck,
+  Warehouse,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -262,6 +263,23 @@ const emptySalespersonForm: SalespersonFormData = {
 }
 
 // ---------------------------------------------------------------------------
+// Warehouse form initial state
+// ---------------------------------------------------------------------------
+interface WarehouseFormData {
+  name: string
+  code: string
+  address: string
+  active: boolean
+}
+
+const emptyWarehouseForm: WarehouseFormData = {
+  name: '',
+  code: '',
+  address: '',
+  active: true,
+}
+
+// ---------------------------------------------------------------------------
 // Audit log entry type
 // ---------------------------------------------------------------------------
 interface AuditLogEntry {
@@ -322,6 +340,14 @@ export default function ConfiguracoesPage() {
   const [salespersonForm, setSalespersonForm] = useState<SalespersonFormData>(emptySalespersonForm)
   const [submittingSalesperson, setSubmittingSalesperson] = useState(false)
   const [salespersonError, setSalespersonError] = useState('')
+
+  // Warehouses state
+  const [warehouseList, setWarehouseList] = useState<ErpWarehouse[]>([])
+  const [loadingWarehouses, setLoadingWarehouses] = useState(true)
+  const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false)
+  const [warehouseForm, setWarehouseForm] = useState<WarehouseFormData>(emptyWarehouseForm)
+  const [submittingWarehouse, setSubmittingWarehouse] = useState(false)
+  const [warehouseError, setWarehouseError] = useState('')
 
   // User delete state
   const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false)
@@ -406,13 +432,28 @@ export default function ConfiguracoesPage() {
     }
   }, [])
 
+  // ------- Fetch warehouses -------
+  const fetchWarehouses = useCallback(async () => {
+    setLoadingWarehouses(true)
+    try {
+      const res = await fetch('/api/warehouses')
+      const json = await res.json()
+      setWarehouseList(json.data ?? [])
+    } catch {
+      console.error('Erro ao carregar depositos')
+    } finally {
+      setLoadingWarehouses(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchCompanies()
     fetchUsers()
     fetchAccounts()
     fetchWorkers()
     fetchSalespeople()
-  }, [fetchCompanies, fetchUsers, fetchAccounts, fetchWorkers, fetchSalespeople])
+    fetchWarehouses()
+  }, [fetchCompanies, fetchUsers, fetchAccounts, fetchWorkers, fetchSalespeople, fetchWarehouses])
 
   // ------- Company form handlers -------
   function handleCompanyFieldChange(field: keyof CompanyFormData, value: string) {
@@ -740,6 +781,52 @@ export default function ConfiguracoesPage() {
     }
   }
 
+  // ------- Warehouse form handlers -------
+  function handleWarehouseFieldChange<K extends keyof WarehouseFormData>(
+    field: K,
+    value: WarehouseFormData[K]
+  ) {
+    setWarehouseForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  async function handleWarehouseSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setWarehouseError('')
+
+    if (!warehouseForm.name.trim() || !warehouseForm.code.trim()) {
+      setWarehouseError('Nome e Codigo sao obrigatorios.')
+      return
+    }
+
+    setSubmittingWarehouse(true)
+    try {
+      const res = await fetch('/api/warehouses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: warehouseForm.name.trim(),
+          code: warehouseForm.code.trim(),
+          address: warehouseForm.address.trim() || undefined,
+          active: warehouseForm.active,
+        }),
+      })
+
+      if (!res.ok) {
+        const json = await res.json()
+        setWarehouseError(json.error ?? 'Erro ao criar deposito.')
+        return
+      }
+
+      setWarehouseDialogOpen(false)
+      setWarehouseForm(emptyWarehouseForm)
+      await fetchWarehouses()
+    } catch {
+      setWarehouseError('Erro de rede ao criar deposito.')
+    } finally {
+      setSubmittingWarehouse(false)
+    }
+  }
+
   // ------- User delete handler -------
   function openDeleteUserDialog(userId: string, userName: string) {
     setDeleteUserId(userId)
@@ -801,14 +888,17 @@ export default function ConfiguracoesPage() {
       />
 
       <Tabs defaultValue="empresa">
-        <TabsList>
-          <TabsTrigger value="empresa">Empresa</TabsTrigger>
-          <TabsTrigger value="integracoes">Integracoes</TabsTrigger>
-          <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
-          <TabsTrigger value="contas">Contas de Recebimento</TabsTrigger>
-          <TabsTrigger value="funcionarios">Funcionarios</TabsTrigger>
-          <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <TabsList>
+            <TabsTrigger value="empresa">Empresa</TabsTrigger>
+            <TabsTrigger value="integracoes">Integracoes</TabsTrigger>
+            <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
+            <TabsTrigger value="contas">Contas de Recebimento</TabsTrigger>
+            <TabsTrigger value="funcionarios">Funcionarios</TabsTrigger>
+            <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
+            <TabsTrigger value="depositos">Depositos</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ============================================================= */}
         {/* Companies Tab                                                  */}
@@ -1201,6 +1291,75 @@ export default function ConfiguracoesPage() {
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                           Nenhum vendedor cadastrado.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ============================================================= */}
+        {/* Warehouses (Depositos) Tab                                     */}
+        {/* ============================================================= */}
+        <TabsContent value="depositos" className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {warehouseList.length} deposito{warehouseList.length !== 1 ? 's' : ''} cadastrado{warehouseList.length !== 1 ? 's' : ''}
+            </p>
+            <Button onClick={() => { setWarehouseForm(emptyWarehouseForm); setWarehouseError(''); setWarehouseDialogOpen(true) }}>
+              <Plus className="h-4 w-4" />
+              Novo Deposito
+            </Button>
+          </div>
+
+          {loadingWarehouses ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Codigo</TableHead>
+                      <TableHead>Endereco</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {warehouseList.map((wh) => (
+                      <TableRow key={wh.id}>
+                        <TableCell className="font-medium">{wh.name}</TableCell>
+                        <TableCell className="text-muted-foreground">{wh.code}</TableCell>
+                        <TableCell className="text-muted-foreground">{wh.address ?? '—'}</TableCell>
+                        <TableCell>
+                          {wh.active ? (
+                            <Badge
+                              variant="secondary"
+                              className="border-0 bg-green-100 text-green-800 font-medium"
+                            >
+                              Ativo
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="secondary"
+                              className="border-0 bg-gray-100 text-gray-600 font-medium"
+                            >
+                              Inativo
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {warehouseList.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                          Nenhum deposito cadastrado.
                         </TableCell>
                       </TableRow>
                     )}
@@ -2126,6 +2285,88 @@ export default function ConfiguracoesPage() {
               Fechar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* =============================================================== */}
+      {/* Dialog: Novo Deposito                                            */}
+      {/* =============================================================== */}
+      <Dialog open={warehouseDialogOpen} onOpenChange={setWarehouseDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Novo Deposito</DialogTitle>
+            <DialogDescription>
+              Preencha os dados do novo deposito. Campos com * sao obrigatorios.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleWarehouseSubmit}>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="wh-name">Nome *</Label>
+                <Input
+                  id="wh-name"
+                  value={warehouseForm.name}
+                  onChange={(e) => handleWarehouseFieldChange('name', e.target.value)}
+                  placeholder="Deposito Principal"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="wh-code">Codigo *</Label>
+                <Input
+                  id="wh-code"
+                  value={warehouseForm.code}
+                  onChange={(e) => handleWarehouseFieldChange('code', e.target.value)}
+                  placeholder="CPS01"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="wh-address">Endereco</Label>
+                <Input
+                  id="wh-address"
+                  value={warehouseForm.address}
+                  onChange={(e) => handleWarehouseFieldChange('address', e.target.value)}
+                  placeholder="Rua, numero - Cidade/UF"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="wh-active"
+                  checked={warehouseForm.active}
+                  onChange={(e) =>
+                    handleWarehouseFieldChange('active', (e.target as HTMLInputElement).checked)
+                  }
+                />
+                <Label htmlFor="wh-active" className="cursor-pointer">
+                  Ativo
+                </Label>
+              </div>
+            </div>
+
+            {warehouseError && (
+              <p className="mt-2 text-sm text-destructive">{warehouseError}</p>
+            )}
+
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setWarehouseDialogOpen(false)}
+                disabled={submittingWarehouse}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={submittingWarehouse}>
+                {submittingWarehouse && <Loader2 className="h-4 w-4 animate-spin" />}
+                Salvar Deposito
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

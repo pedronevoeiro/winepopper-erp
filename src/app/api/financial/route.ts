@@ -6,12 +6,28 @@ import type { ErpFinancialType } from '@/types/database'
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const typeFilter = searchParams.get('type') as ErpFinancialType | null
+  const accountId = searchParams.get('account_id')
+  const dateFrom = searchParams.get('date_from')
+  const dateTo = searchParams.get('date_to')
 
   let entries = [...financialEntries]
 
   // Filter by type
   if (typeFilter && (typeFilter === 'receivable' || typeFilter === 'payable')) {
     entries = entries.filter((e) => e.type === typeFilter)
+  }
+
+  // Filter by account
+  if (accountId) {
+    entries = entries.filter((e) => e.account_id === accountId)
+  }
+
+  // Filter by date range (based on due_date)
+  if (dateFrom) {
+    entries = entries.filter((e) => e.due_date >= dateFrom)
+  }
+  if (dateTo) {
+    entries = entries.filter((e) => e.due_date <= dateTo + 'T23:59:59Z')
   }
 
   // Sort by due_date ascending (closest due dates first)

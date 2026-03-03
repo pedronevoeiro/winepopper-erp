@@ -16,10 +16,11 @@ import {
   Factory,
   PackagePlus,
   Percent,
-  UserCheck,
   Settings,
 } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useSidebar } from '@/components/layout/SidebarContext'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -33,17 +34,16 @@ const navigation = [
   { name: 'Produção', href: '/producao', icon: Factory },
   { name: 'Entradas', href: '/entradas', icon: PackagePlus },
   { name: 'Comissões', href: '/comissoes', icon: Percent },
-  { name: 'Vendedores', href: '/vendedores', icon: UserCheck },
   { name: 'Configurações', href: '/configuracoes', icon: Settings },
 ]
 
-export function Sidebar() {
+function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r bg-card">
+    <>
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2 border-b px-6">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b px-6">
         <Image
           src="/logo/simbolo-preto.png"
           alt="Winepopper"
@@ -63,6 +63,7 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={onNavigate}
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   isActive
@@ -82,6 +83,31 @@ export function Sidebar() {
       <div className="border-t px-6 py-3">
         <p className="text-xs text-muted-foreground">Winepopper ERP v1.0</p>
       </div>
-    </aside>
+    </>
+  )
+}
+
+export function Sidebar() {
+  const { open, setOpen } = useSidebar()
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex h-screen w-64 flex-col border-r bg-card">
+        <SidebarNav />
+      </aside>
+
+      {/* Mobile sidebar (Sheet drawer) */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="left" className="w-64 p-0" showCloseButton={false}>
+          <SheetHeader className="sr-only">
+            <SheetTitle>Menu</SheetTitle>
+          </SheetHeader>
+          <div className="flex h-full flex-col">
+            <SidebarNav onNavigate={() => setOpen(false)} />
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }

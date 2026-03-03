@@ -1,8 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -25,7 +34,7 @@ import {
   PAYMENT_METHOD_LABELS,
 } from '@/lib/constants'
 import { TrendingDown, AlertTriangle, CheckCircle, Plus } from 'lucide-react'
-import type { ErpFinancialEntry } from '@/types/database'
+import type { ErpFinancialEntry, ErpPaymentAccount } from '@/types/database'
 
 interface FinancialEntryWithContact extends ErpFinancialEntry {
   contact?: { name: string } | null
@@ -41,6 +50,12 @@ export default function ContasAPagarPage() {
   const [entries, setEntries] = useState<FinancialEntryWithContact[]>([])
   const [summary, setSummary] = useState<FinancialSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [accounts, setAccounts] = useState<ErpPaymentAccount[]>([])
+
+  // Filters
+  const [accountFilter, setAccountFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   useEffect(() => {
     fetch('/api/financial?type=payable')
@@ -51,7 +66,31 @@ export default function ContasAPagarPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false))
+
+    fetch('/api/payment-accounts')
+      .then((res) => res.json())
+      .then((json) => setAccounts(Array.isArray(json.data) ? json.data : []))
+      .catch(console.error)
   }, [])
+
+  const filtered = useMemo(() => {
+    let result = [...entries]
+    if (accountFilter !== 'all') {
+      result = result.filter((e) => e.account_id === accountFilter)
+    }
+    if (dateFrom) {
+      result = result.filter((e) => e.due_date >= dateFrom)
+    }
+    if (dateTo) {
+      result = result.filter((e) => e.due_date <= dateTo + 'T23:59:59Z')
+    }
+    return result
+  }, [entries, accountFilter, dateFrom, dateTo])
+
+  const accountName = (id: string | null) => {
+    if (!id) return null
+    return accounts.find((a) => a.id === id)?.name ?? null
+  }
 
   return (
     <div className="space-y-6">
@@ -73,6 +112,51 @@ export default function ContasAPagarPage() {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="space-y-1">
+          <Label className="text-xs">Conta</Label>
+          <Select value={accountFilter} onValueChange={setAccountFilter}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Todas as contas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as contas</SelectItem>
+              {accounts.filter((a) => a.active).map((a) => (
+                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">De</Label>
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="w-[160px]"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Ate</Label>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="w-[160px]"
+          />
+        </div>
+        {(accountFilter !== 'all' || dateFrom || dateTo) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setAccountFilter('all'); setDateFrom(''); setDateTo('') }}
+          >
+            Limpar filtros
+          </Button>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -133,7 +217,7 @@ export default function ContasAPagarPage() {
             ))}
           </CardContent>
         </Card>
-      ) : entries.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="flex h-48 items-center justify-center text-muted-foreground">
             Nenhuma conta a pagar encontrada
@@ -145,16 +229,17 @@ export default function ContasAPagarPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Descrição</TableHead>
+                  <TableHead>Descricao</TableHead>
                   <TableHead>Contato</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                   <TableHead>Vencimento</TableHead>
+                  <TableHead>Conta</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Forma Pgto</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry) => (
+                {filtered.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell className="max-w-[200px] truncate font-medium">
                       {entry.description}
@@ -169,6 +254,9 @@ export default function ContasAPagarPage() {
                       )}
                     </TableCell>
                     <TableCell>{formatDate(entry.due_date)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {accountName(entry.account_id) ?? '-'}
+                    </TableCell>
                     <TableCell>
                       <StatusBadge status={entry.status} type="financial" />
                     </TableCell>

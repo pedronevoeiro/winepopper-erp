@@ -11,10 +11,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { LogOut, User } from 'lucide-react'
+import { LogOut, Menu, User } from 'lucide-react'
+import { useSidebar } from '@/components/layout/SidebarContext'
 
 export function Header() {
   const { data: session } = useSession()
+  const { setOpen } = useSidebar()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const user = session?.user as any
   const displayName = user?.displayName || user?.name || user?.email || 'Usuário'
@@ -26,8 +28,18 @@ export function Header() {
     .slice(0, 2)
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-6">
-      <div />
+    <header className="flex h-16 items-center justify-between border-b bg-card px-4 md:px-6">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="md:hidden"
+        onClick={() => setOpen(true)}
+      >
+        <Menu className="h-5 w-5" />
+        <span className="sr-only">Menu</span>
+      </Button>
+
+      <div className="hidden md:block" />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -35,7 +47,7 @@ export function Header() {
             <Avatar className="h-8 w-8">
               <AvatarFallback className="text-xs">{initials}</AvatarFallback>
             </Avatar>
-            <span className="text-sm">{displayName}</span>
+            <span className="hidden sm:inline text-sm">{displayName}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

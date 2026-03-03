@@ -134,9 +134,18 @@ function extractCnpjFromKey(key: string): string | null {
 // ---------------------------------------------------------------------------
 // XML Parsing
 // ---------------------------------------------------------------------------
+function stripXmlNamespaces(xml: string): string {
+  return xml.replace(/\s+xmlns\s*=\s*"[^"]*"/g, '')
+            .replace(/\s+xmlns:\w+\s*=\s*"[^"]*"/g, '')
+}
+
 function parseNFeXml(xmlString: string): ParsedNFe | null {
   const parser = new DOMParser()
-  const doc = parser.parseFromString(xmlString, 'text/xml')
+  const cleanXml = stripXmlNamespaces(xmlString)
+  const doc = parser.parseFromString(cleanXml, 'text/xml')
+
+  if (doc.querySelector('parsererror')) return null
+
   const nfe = doc.querySelector('NFe, nfeProc')
   if (!nfe) return null
 
@@ -152,7 +161,9 @@ function parseNFeXml(xmlString: string): ParsedNFe | null {
     invoice: {
       number: ide?.querySelector('nNF')?.textContent ?? '',
       series: ide?.querySelector('serie')?.textContent ?? '',
-      key: nfe.querySelector('protNFe chNFe')?.textContent ?? '',
+      key: doc.querySelector('protNFe chNFe')?.textContent
+        ?? doc.querySelector('chNFe')?.textContent
+        ?? '',
       issue_date: ide?.querySelector('dhEmi')?.textContent ?? '',
     },
     items: Array.from(dets).map((det) => {
@@ -1000,7 +1011,7 @@ export default function NovaEntradaPage() {
                         />
                       </div>
 
-                      <div className="grid gap-3 grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-3">
                         <div className="space-y-1">
                           <Label className="text-xs">NCM</Label>
                           <Input
@@ -1271,7 +1282,7 @@ export default function NovaEntradaPage() {
               />
             </div>
 
-            <div className="grid gap-4 grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="new-supplier-email">E-mail</Label>
                 <Input
@@ -1293,7 +1304,7 @@ export default function NovaEntradaPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="new-supplier-city">Cidade</Label>
                 <Input

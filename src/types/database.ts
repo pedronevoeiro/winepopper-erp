@@ -185,6 +185,8 @@ export interface ErpSalesOrder {
   store_order_id: string | null
   pagarme_id: string | null
   melhorenvio_id: string | null
+  sales_channel: 'b2b' | 'b2c' | null
+  store_name: string | null
   notes: string | null
   attachments: string[]
   internal_notes: string | null
@@ -219,6 +221,7 @@ export interface ErpFinancialEntry {
   due_date: string
   payment_date: string | null
   payment_method: ErpPaymentMethod | null
+  account_id: string | null
   reference_type: string | null
   reference_id: string | null
   category: string | null
