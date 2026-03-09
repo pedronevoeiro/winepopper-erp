@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@/types/database'
 
 // Usa service_role key — NUNCA expor ao browser
 export function createAdminClient() {
@@ -8,7 +7,7 @@ export function createAdminClient() {
   if (!url || !key) {
     throw new Error('Supabase env vars not configured (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)')
   }
-  return createClient<Database>(url, key, {
+  return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 }

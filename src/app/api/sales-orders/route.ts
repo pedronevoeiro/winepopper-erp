@@ -1,42 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  getOrdersWithRelations,
-  salesOrders,
-  salesOrderItems,
-  products,
-} from '@/lib/data'
-import type {
-  ErpOrderStatus,
-  ErpPaymentMethod,
-  ErpSalesOrder,
-  ErpSalesOrderItem,
-} from '@/types/database'
+import { db } from '@/lib/db'
+import type { ErpOrderStatus, ErpPaymentMethod } from '@/types/database'
 
 // GET /api/sales-orders?status=xxx&company_id=xxx
 export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl
-  const statusFilter = searchParams.get('status') as ErpOrderStatus | null
-  const companyFilter = searchParams.get('company_id')
+  try {
+    const { searchParams } = request.nextUrl
+    const statusFilter = searchParams.get('status') as ErpOrderStatus | null
+    const companyFilter = searchParams.get('company_id')
 
-  let orders = getOrdersWithRelations()
+    let query = db()
+      .from('erp_sales_orders')
+      .select('*, contact:erp_contacts(*), salesperson:erp_salespeople(*), company:erp_companies(*), items:erp_sales_order_items(*)')
+      .order('order_date', { ascending: false })
 
-  // Filter by status
-  if (statusFilter) {
-    orders = orders.filter((o) => o.status === statusFilter)
+    if (statusFilter) {
+      query = query.eq('status', statusFilter)
+    }
+
+    if (companyFilter) {
+      query = query.eq('company_id', companyFilter)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('GET /api/sales-orders error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      data: data ?? [],
+      count: data?.length ?? 0,
+    })
+  } catch (err) {
+    console.error('GET /api/sales-orders unexpected error:', err)
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 })
   }
-
-  // Filter by company
-  if (companyFilter) {
-    orders = orders.filter((o) => o.company_id === companyFilter)
-  }
-
-  // Sort by order_date descending (most recent first)
-  orders.sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime())
-
-  return NextResponse.json({
-    data: orders,
-    count: orders.length,
-  })
 }
 
 // POST /api/sales-orders — create a new sales order
@@ -66,20 +66,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate order number: max existing + 1
-    const maxOrderNumber = salesOrders.reduce(
-      (max, o) => Math.max(max, o.order_number),
-      0
-    )
-    const orderNumber = maxOrderNumber + 1
+    const supabase = db()
 
+    // Generate order number: max existing + 1
+    const { data: maxRow } = await supabase
+      .from('erp_sales_orders')
+      .select('order_number')
+      .order('order_number', { ascending: false })
+      .limit(1)
+      .single()
+
+    const orderNumber = (maxRow?.order_number ?? 0) + 1
     const now = new Date().toISOString()
-    const orderId = crypto.randomUUID()
 
     // Calculate totals from items
     let subtotal = 0
     let discountValue = 0
-    const newItems: ErpSalesOrderItem[] = []
+    const itemInserts: Array<Record<string, unknown>> = []
 
     for (const item of body.items) {
       if (!item.product_id || !item.quantity || item.quantity < 1) {
@@ -89,8 +92,30 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const product = products.find((p) => p.id === item.product_id)
-      const unitPrice = item.unit_price ?? product?.sell_price ?? 0
+      // Fetch product for defaults
+      let unitPrice = item.unit_price
+      let description = item.description ?? ''
+      let sku: string | null = null
+      let ncm: string | null = null
+      let cfop: string | null = null
+
+      if (!unitPrice || !description) {
+        const { data: product } = await supabase
+          .from('erp_products')
+          .select('name, sku, sell_price, ncm, cfop_venda')
+          .eq('id', item.product_id)
+          .single()
+
+        if (product) {
+          unitPrice = unitPrice ?? product.sell_price ?? 0
+          description = description || product.name
+          sku = product.sku ?? null
+          ncm = product.ncm ?? null
+          cfop = product.cfop_venda ?? null
+        }
+      }
+
+      unitPrice = unitPrice ?? 0
       const quantity = Number(item.quantity)
       const discount = Number(item.discount ?? 0)
       const lineTotal = quantity * unitPrice - discount
@@ -98,76 +123,96 @@ export async function POST(request: NextRequest) {
       subtotal += quantity * unitPrice
       discountValue += discount
 
-      newItems.push({
-        id: crypto.randomUUID(),
-        order_id: orderId,
+      itemInserts.push({
+        order_id: '__PLACEHOLDER__',
         product_id: item.product_id,
         variation_id: item.variation_id ?? null,
-        description: product?.name ?? item.description ?? '',
-        sku: product?.sku ?? null,
+        description,
+        sku,
         quantity,
         unit_price: unitPrice,
         discount_pct: 0,
         total: lineTotal,
-        ncm: product?.ncm ?? null,
-        cfop: product?.cfop_venda ?? null,
+        ncm,
+        cfop,
       })
     }
 
     const shippingCost = Number(body.shipping_cost ?? 0)
     const total = subtotal - discountValue + shippingCost
-
     const status: ErpOrderStatus = body.status === 'draft' ? 'draft' : 'pending'
 
-    const newOrder: ErpSalesOrder = {
-      id: orderId,
-      order_number: orderNumber,
-      contact_id: body.contact_id,
-      salesperson_id: body.salesperson_id ?? null,
-      status,
-      order_date: now,
-      expected_date: null,
-      subtotal,
-      discount_value: discountValue,
-      shipping_cost: shippingCost,
-      other_costs: 0,
-      total,
-      payment_method: (body.payment_method as ErpPaymentMethod) ?? null,
-      payment_account_id: body.payment_account_id ?? null,
-      payment_condition: null,
-      installments: 1,
-      shipping_address: null,
-      shipping_method: null,
-      shipping_tracking: null,
-      carrier_name: null,
-      company_id: body.company_id ?? null,
-      store_order_id: null,
-      pagarme_id: null,
-      melhorenvio_id: null,
-      sales_channel: body.sales_channel ?? null,
-      store_name: body.store_name ?? null,
-      notes: body.notes ?? null,
-      attachments: Array.isArray(body.attachments) ? body.attachments : [],
-      internal_notes: null,
-      created_by: null,
-      created_at: now,
-      updated_at: now,
+    // Insert order
+    const { data: newOrder, error: orderError } = await supabase
+      .from('erp_sales_orders')
+      .insert({
+        order_number: orderNumber,
+        contact_id: body.contact_id,
+        salesperson_id: body.salesperson_id ?? null,
+        status,
+        order_date: now,
+        expected_date: null,
+        subtotal,
+        discount_value: discountValue,
+        shipping_cost: shippingCost,
+        other_costs: 0,
+        total,
+        payment_method: (body.payment_method as ErpPaymentMethod) ?? null,
+        payment_account_id: body.payment_account_id ?? null,
+        payment_condition: null,
+        installments: 1,
+        shipping_address: null,
+        shipping_method: null,
+        shipping_tracking: null,
+        carrier_name: null,
+        company_id: body.company_id ?? null,
+        store_order_id: null,
+        pagarme_id: null,
+        melhorenvio_id: null,
+        sales_channel: body.sales_channel ?? null,
+        store_name: body.store_name ?? null,
+        notes: body.notes ?? null,
+        attachments: Array.isArray(body.attachments) ? body.attachments : [],
+        internal_notes: null,
+        created_by: null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select()
+      .single()
+
+    if (orderError || !newOrder) {
+      console.error('POST /api/sales-orders insert order error:', orderError)
+      return NextResponse.json({ error: orderError?.message ?? 'Erro ao criar pedido.' }, { status: 500 })
     }
 
-    // Push to in-memory arrays
-    salesOrders.push(newOrder)
-    salesOrderItems.push(...newItems)
+    // Insert items with real order_id
+    const itemsWithOrderId = itemInserts.map((item) => ({
+      ...item,
+      order_id: newOrder.id,
+    }))
+
+    const { data: newItems, error: itemsError } = await supabase
+      .from('erp_sales_order_items')
+      .insert(itemsWithOrderId)
+      .select()
+
+    if (itemsError) {
+      console.error('POST /api/sales-orders insert items error:', itemsError)
+      return NextResponse.json({ error: itemsError.message }, { status: 500 })
+    }
 
     return NextResponse.json(
       {
         data: {
           ...newOrder,
-          items: newItems,
+          items: newItems ?? [],
         },
       },
       { status: 201 }
     )
-  } catch {
+  } catch (err) {
+    console.error('POST /api/sales-orders unexpected error:', err)
     return NextResponse.json(
       { error: 'Corpo da requisicao invalido.' },
       { status: 400 }

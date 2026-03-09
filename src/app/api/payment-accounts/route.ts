@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { paymentAccounts, paymentAccountMethods } from '@/lib/data'
-import type { ErpPaymentAccount, ErpPaymentAccountMethod, ErpPaymentMethod } from '@/types/database'
+import { db } from '@/lib/db'
+import type { ErpPaymentMethod } from '@/types/database'
 
 // GET /api/payment-accounts
 // Returns all payment accounts with their supported methods joined.
 export async function GET() {
-  const data = paymentAccounts.map((account) => ({
-    id: account.id,
-    name: account.name,
-    provider: account.provider,
-    active: account.active,
-    notes: account.notes,
-    methods: paymentAccountMethods
-      .filter((m) => m.account_id === account.id)
-      .map((m) => ({
+  try {
+    const { data, error } = await db()
+      .from('erp_payment_accounts')
+      .select('*, methods:erp_payment_account_methods(*)')
+
+    if (error) {
+      console.error('GET /api/payment-accounts error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Reshape to match API contract
+    const result = (data ?? []).map((account) => ({
+      id: account.id,
+      name: account.name,
+      provider: account.provider,
+      active: account.active,
+      notes: account.notes,
+      methods: ((account.methods ?? []) as Array<Record<string, unknown>>).map((m) => ({
         id: m.id,
         payment_method: m.payment_method,
         tax_percentage: m.tax_percentage,
@@ -22,9 +31,13 @@ export async function GET() {
         installment_max: m.installment_max,
         active: m.active,
       })),
-  }))
+    }))
 
-  return NextResponse.json({ data })
+    return NextResponse.json({ data: result })
+  } catch (err) {
+    console.error('GET /api/payment-accounts unexpected error:', err)
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 })
+  }
 }
 
 // POST /api/payment-accounts
@@ -33,6 +46,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    const supabase = db()
 
     // Validate required fields
     if (!body.name || !body.provider) {
@@ -43,7 +57,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for duplicate provider slug
-    const existing = paymentAccounts.find((a) => a.provider === body.provider)
+    const { data: existing } = await supabase
+      .from('erp_payment_accounts')
+      .select('id')
+      .eq('provider', body.provider)
+      .limit(1)
+      .maybeSingle()
+
     if (existing) {
       return NextResponse.json(
         { error: `Já existe uma conta com o provider "${body.provider}".` },
@@ -52,19 +72,31 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString()
-    const newAccount: ErpPaymentAccount = {
-      id: crypto.randomUUID(),
-      name: body.name,
-      provider: body.provider,
-      active: true,
-      notes: body.notes ?? null,
-      created_at: now,
-      updated_at: now,
+
+    // Insert account
+    const { data: newAccount, error: accountErr } = await supabase
+      .from('erp_payment_accounts')
+      .insert({
+        name: body.name,
+        provider: body.provider,
+        active: true,
+        notes: body.notes ?? null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select()
+      .single()
+
+    if (accountErr || !newAccount) {
+      console.error('POST /api/payment-accounts insert error:', accountErr)
+      return NextResponse.json({ error: accountErr?.message ?? 'Erro ao criar conta.' }, { status: 500 })
     }
 
     // Create methods if provided
-    const newMethods: ErpPaymentAccountMethod[] = []
+    let newMethods: Array<Record<string, unknown>> = []
     if (body.methods && Array.isArray(body.methods)) {
+      // Validate methods
+      const seenMethods = new Set<string>()
       for (const m of body.methods) {
         if (!m.payment_method) {
           return NextResponse.json(
@@ -73,34 +105,35 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        // Check for duplicate method within this request
-        const duplicate = newMethods.find(
-          (nm) => nm.payment_method === m.payment_method
-        )
-        if (duplicate) {
+        if (seenMethods.has(m.payment_method)) {
           return NextResponse.json(
             { error: `Método duplicado: "${m.payment_method}" aparece mais de uma vez.` },
             { status: 400 }
           )
         }
-
-        const newMethod: ErpPaymentAccountMethod = {
-          id: crypto.randomUUID(),
-          account_id: newAccount.id,
-          payment_method: m.payment_method as ErpPaymentMethod,
-          tax_percentage: Number(m.tax_percentage ?? 0),
-          tax_fixed: Number(m.tax_fixed ?? 0),
-          installment_min: Number(m.installment_min ?? 1),
-          installment_max: Number(m.installment_max ?? 1),
-          active: true,
-        }
-        newMethods.push(newMethod)
+        seenMethods.add(m.payment_method)
       }
-    }
 
-    // Push to in-memory arrays
-    paymentAccounts.push(newAccount)
-    paymentAccountMethods.push(...newMethods)
+      const methodInserts = body.methods.map((m: Record<string, unknown>) => ({
+        account_id: newAccount.id,
+        payment_method: m.payment_method as ErpPaymentMethod,
+        tax_percentage: Number(m.tax_percentage ?? 0),
+        tax_fixed: Number(m.tax_fixed ?? 0),
+        installment_min: Number(m.installment_min ?? 1),
+        installment_max: Number(m.installment_max ?? 1),
+        active: true,
+      }))
+
+      const { data: methods, error: methodsErr } = await supabase
+        .from('erp_payment_account_methods')
+        .insert(methodInserts)
+        .select()
+
+      if (methodsErr) {
+        console.error('POST /api/payment-accounts insert methods error:', methodsErr)
+      }
+      newMethods = methods ?? []
+    }
 
     return NextResponse.json(
       {
@@ -121,7 +154,8 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     )
-  } catch {
+  } catch (err) {
+    console.error('POST /api/payment-accounts unexpected error:', err)
     return NextResponse.json(
       { error: 'Corpo da requisição inválido.' },
       { status: 400 }
@@ -143,21 +177,32 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const account = paymentAccounts.find((a) => a.id === body.id)
-    if (!account) {
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    }
+
+    if (typeof body.active === 'boolean') {
+      updatePayload.active = body.active
+    }
+
+    const { data: updated, error } = await db()
+      .from('erp_payment_accounts')
+      .update(updatePayload)
+      .eq('id', body.id)
+      .select('id, active')
+      .single()
+
+    if (error || !updated) {
+      console.error('PATCH /api/payment-accounts error:', error)
       return NextResponse.json(
         { error: `Conta não encontrada: ${body.id}` },
         { status: 404 }
       )
     }
 
-    if (typeof body.active === 'boolean') {
-      account.active = body.active
-    }
-    account.updated_at = new Date().toISOString()
-
-    return NextResponse.json({ data: { id: account.id, active: account.active } })
-  } catch {
+    return NextResponse.json({ data: { id: updated.id, active: updated.active } })
+  } catch (err) {
+    console.error('PATCH /api/payment-accounts unexpected error:', err)
     return NextResponse.json(
       { error: 'Corpo da requisição inválido.' },
       { status: 400 }

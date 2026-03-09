@@ -1,4 +1,4 @@
-import type { ErpOrderStatus, ErpFinancialStatus, ErpProductionStatus, ErpCommissionStatus, ErpInvoiceStatus, ErpProductType } from '@/types/database'
+import type { ErpOrderStatus, ErpFinancialStatus, ErpProductionStatus, ErpCommissionStatus, ErpInvoiceStatus, ErpProductType, ErpProductStructure, ErpPurchaseOrderStatus } from '@/types/database'
 
 // Labels e cores para tipos de produto
 export const PRODUCT_TYPE_LABELS: Record<ErpProductType, string> = {
@@ -11,6 +11,36 @@ export const PRODUCT_TYPE_COLORS: Record<ErpProductType, string> = {
   produto_final: 'bg-blue-100 text-blue-800',
   insumo: 'bg-amber-100 text-amber-800',
   ativo_imobilizado: 'bg-purple-100 text-purple-800',
+}
+
+// Labels e cores para estrutura de produto
+export const PRODUCT_STRUCTURE_LABELS: Record<ErpProductStructure, string> = {
+  simples: 'Simples',
+  composto: 'Composto',
+  com_variacoes: 'Com Variações',
+}
+
+export const PRODUCT_STRUCTURE_COLORS: Record<ErpProductStructure, string> = {
+  simples: 'bg-gray-100 text-gray-700',
+  composto: 'bg-teal-100 text-teal-800',
+  com_variacoes: 'bg-violet-100 text-violet-800',
+}
+
+// Labels e cores para status de pedido de compra
+export const PURCHASE_ORDER_STATUS_LABELS: Record<ErpPurchaseOrderStatus, string> = {
+  draft: 'Rascunho',
+  sent: 'Enviado',
+  partial: 'Recebido Parcial',
+  received: 'Recebido',
+  cancelled: 'Cancelado',
+}
+
+export const PURCHASE_ORDER_STATUS_COLORS: Record<ErpPurchaseOrderStatus, string> = {
+  draft: 'bg-gray-100 text-gray-700',
+  sent: 'bg-blue-100 text-blue-800',
+  partial: 'bg-yellow-100 text-yellow-800',
+  received: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800',
 }
 
 // Labels em português para status

@@ -15,6 +15,7 @@ import {
   Truck,
   Factory,
   PackagePlus,
+  ShoppingBag,
   Percent,
   Settings,
 } from 'lucide-react'
@@ -33,6 +34,7 @@ const navigation = [
   { name: 'Envios', href: '/envios', icon: Truck },
   { name: 'Produção', href: '/producao', icon: Factory },
   { name: 'Entradas', href: '/entradas', icon: PackagePlus },
+  { name: 'Compras', href: '/compras', icon: ShoppingBag },
   { name: 'Comissões', href: '/comissoes', icon: Percent },
   { name: 'Configurações', href: '/configuracoes', icon: Settings },
 ]

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { users } from '@/lib/data'
-import type { ErpUserProfile, ErpUserRole } from '@/types/database'
+import { db } from '@/lib/db'
+import type { ErpUserRole } from '@/types/database'
 
 const VALID_ROLES: ErpUserRole[] = [
   'admin',
@@ -13,10 +13,24 @@ const VALID_ROLES: ErpUserRole[] = [
 
 // GET /api/users — list all users
 export async function GET() {
-  return NextResponse.json({
-    data: users,
-    count: users.length,
-  })
+  try {
+    const { data, error } = await db()
+      .from('erp_user_profiles')
+      .select('*')
+
+    if (error) {
+      console.error('GET /api/users error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      data: data ?? [],
+      count: data?.length ?? 0,
+    })
+  } catch (err) {
+    console.error('GET /api/users unexpected error:', err)
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 })
+  }
 }
 
 // POST /api/users — create a new user
@@ -40,10 +54,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const supabase = db()
+
     // Check for duplicate email
-    const existing = users.find(
-      (u) => u.email.toLowerCase() === body.email.toLowerCase()
-    )
+    const { data: existing } = await supabase
+      .from('erp_user_profiles')
+      .select('id')
+      .ilike('email', body.email)
+      .limit(1)
+      .maybeSingle()
+
     if (existing) {
       return NextResponse.json(
         { error: 'Ja existe um usuario com este e-mail.' },
@@ -52,23 +72,30 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString()
-    const newUser: ErpUserProfile = {
-      id: crypto.randomUUID(),
-      email: body.email,
-      display_name: body.display_name,
-      role: body.role,
-      phone: body.phone ?? null,
-      active: body.active ?? true,
-      default_company_id: body.default_company_id ?? null,
-      created_at: now,
-      updated_at: now,
+
+    const { data: newUser, error } = await supabase
+      .from('erp_user_profiles')
+      .insert({
+        email: body.email,
+        display_name: body.display_name,
+        role: body.role,
+        phone: body.phone ?? null,
+        active: body.active ?? true,
+        default_company_id: body.default_company_id ?? null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('POST /api/users error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Add to in-memory array (won't persist across restarts)
-    users.push(newUser)
-
     return NextResponse.json({ data: newUser }, { status: 201 })
-  } catch {
+  } catch (err) {
+    console.error('POST /api/users unexpected error:', err)
     return NextResponse.json(
       { error: 'Corpo da requisicao invalido.' },
       { status: 400 }

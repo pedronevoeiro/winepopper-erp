@@ -1,31 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auditLog, users } from '@/lib/data'
+import { db } from '@/lib/db'
 
 // GET /api/audit-log — list audit log entries, optionally filtered by user_id
 export async function GET(request: NextRequest) {
-  const userId = request.nextUrl.searchParams.get('user_id')
+  try {
+    const userId = request.nextUrl.searchParams.get('user_id')
 
-  let entries = [...auditLog]
+    let query = db()
+      .from('erp_audit_log')
+      .select('*, user:erp_user_profiles(display_name)')
+      .order('created_at', { ascending: false })
 
-  // Filter by user_id if provided
-  if (userId) {
-    entries = entries.filter((e) => e.user_id === userId)
-  }
-
-  // Sort by created_at descending (newest first)
-  entries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
-  // Enrich with user display_name
-  const enriched = entries.map((entry) => {
-    const user = entry.user_id ? users.find((u) => u.id === entry.user_id) : null
-    return {
-      ...entry,
-      user_display_name: user?.display_name ?? null,
+    if (userId) {
+      query = query.eq('user_id', userId)
     }
-  })
 
-  return NextResponse.json({
-    data: enriched,
-    count: enriched.length,
-  })
+    const { data, error } = await query
+
+    if (error) {
+      console.error('GET /api/audit-log error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Flatten user display_name for API contract compatibility
+    const enriched = (data ?? []).map((entry) => {
+      const user = entry.user as { display_name: string } | null
+      return {
+        ...entry,
+        user: undefined,
+        user_display_name: user?.display_name ?? null,
+      }
+    })
+
+    return NextResponse.json({
+      data: enriched,
+      count: enriched.length,
+    })
+  } catch (err) {
+    console.error('GET /api/audit-log unexpected error:', err)
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 })
+  }
 }

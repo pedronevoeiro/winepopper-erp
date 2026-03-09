@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ArrowLeft } from 'lucide-react'
 
 const contactSchema = z.object({
@@ -40,9 +41,12 @@ export default function NovoContatoPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [isento, setIsento] = useState(false)
+
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<ContactFormData>({
     resolver: zodResolver(contactSchema),
@@ -51,6 +55,14 @@ export default function NovoContatoPage() {
       person_type: 'PJ',
     },
   })
+
+  useEffect(() => {
+    if (isento) {
+      setValue('state_reg', 'ISENTO')
+    } else {
+      setValue('state_reg', '')
+    }
+  }, [isento, setValue])
 
   async function onSubmit(data: ContactFormData) {
     setSubmitting(true)
@@ -184,7 +196,21 @@ export default function NovoContatoPage() {
                   id="state_reg"
                   placeholder="Inscricao estadual"
                   {...register('state_reg')}
+                  disabled={isento}
                 />
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="state_reg_isento"
+                    checked={isento}
+                    onChange={(e) => setIsento(e.target.checked)}
+                  />
+                  <label
+                    htmlFor="state_reg_isento"
+                    className="text-sm text-muted-foreground cursor-pointer"
+                  >
+                    Isento
+                  </label>
+                </div>
               </div>
 
               {/* E-mail */}

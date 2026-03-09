@@ -56,6 +56,7 @@ interface ProductionComponent {
   component_sku: string | null
   required_qty: number
   consumed_qty: number
+  unit?: string
 }
 
 interface ProductionWorker {
@@ -506,6 +507,7 @@ export default function ProductionDetailPage({
               <TableHeader>
                 <TableRow>
                   <TableHead>Componente</TableHead>
+                  <TableHead className="w-[80px]">Unidade</TableHead>
                   <TableHead className="text-right">Qtd Necessaria</TableHead>
                   <TableHead className="text-right">Qtd Consumida</TableHead>
                   <TableHead className="text-center w-[80px]">Status</TableHead>
@@ -523,6 +525,9 @@ export default function ProductionDetailPage({
                             {c.component_sku}
                           </div>
                         )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {c.unit || 'un'}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {c.required_qty}

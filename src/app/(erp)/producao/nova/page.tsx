@@ -48,10 +48,26 @@ import { PRODUCT_TYPE_LABELS, PRODUCT_TYPE_COLORS } from '@/lib/constants'
 import type { ErpProductType } from '@/types/database'
 
 // ── Zod schema ──────────────────────────────────────────────
+const UNIT_OPTIONS = [
+  { value: 'un', label: 'un (unidade)' },
+  { value: 'pç', label: 'pç (peça)' },
+  { value: 'kg', label: 'kg' },
+  { value: 'g', label: 'g (grama)' },
+  { value: 'L', label: 'L (litro)' },
+  { value: 'ml', label: 'ml' },
+  { value: 'm', label: 'm (metro)' },
+  { value: 'cm', label: 'cm' },
+  { value: 'cx', label: 'cx (caixa)' },
+  { value: 'rolo', label: 'rolo' },
+  { value: 'folha', label: 'folha' },
+  { value: 'par', label: 'par' },
+]
+
 const componentSchema = z.object({
   component_id: z.string().min(1, 'Selecione um componente'),
   qty_per_unit: z.coerce.number().min(0, 'Deve ser >= 0'),
   total_needed: z.coerce.number().min(0),
+  unit: z.string().default('un'),
   stock_available: z.number().optional(),
 })
 
@@ -86,6 +102,7 @@ interface BomComponent {
   id: string
   component_id: string
   quantity: number // qty per unit
+  unit?: string
   component_name?: string
   component_sku?: string | null
   stock_available?: number
@@ -203,6 +220,7 @@ export default function NovaOrdemProducaoPage() {
           component_id: b.component_id,
           qty_per_unit: b.quantity,
           total_needed: b.quantity * qty,
+          unit: b.unit ?? 'un',
           stock_available: b.stock_available ?? 0,
         }))
         replace(newComponents)
@@ -263,6 +281,7 @@ export default function NovaOrdemProducaoPage() {
         components: values.components.map((c) => ({
           component_id: c.component_id,
           required_qty: c.total_needed,
+          unit: c.unit || 'un',
         })),
         assigned_workers: values.assigned_workers,
         planned_date: values.planned_date || null,
@@ -295,6 +314,7 @@ export default function NovaOrdemProducaoPage() {
       component_id: '',
       qty_per_unit: 1,
       total_needed: watchQuantity || 1,
+      unit: 'un',
       stock_available: 0,
     })
   }
@@ -420,19 +440,10 @@ export default function NovaOrdemProducaoPage() {
 
           {/* Section 2: Componentes (BOM) */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle>Componentes (BOM)</CardTitle>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddComponent}
-              >
-                <Plus className="mr-1 h-3 w-3" />
-                Adicionar
-              </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               {loadingBom ? (
                 <div className="space-y-2">
                   {Array.from({ length: 3 }).map((_, i) => (
@@ -450,6 +461,7 @@ export default function NovaOrdemProducaoPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Insumo</TableHead>
+                      <TableHead className="w-[110px]">Unidade</TableHead>
                       <TableHead className="text-right w-[120px]">
                         Qtd por Un.
                       </TableHead>
@@ -502,6 +514,25 @@ export default function NovaOrdemProducaoPage() {
                               </Select>
                             )}
                           </TableCell>
+                          <TableCell>
+                            <Select
+                              value={component.unit || 'un'}
+                              onValueChange={(val) =>
+                                form.setValue(`components.${index}.unit`, val)
+                              }
+                            >
+                              <SelectTrigger className="w-[100px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {UNIT_OPTIONS.map((u) => (
+                                  <SelectItem key={u.value} value={u.value}>
+                                    {u.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
                           <TableCell className="text-right">
                             <Input
                               type="number"
@@ -552,6 +583,16 @@ export default function NovaOrdemProducaoPage() {
                   </TableBody>
                 </Table>
               )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddComponent}
+                className="w-full"
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                Adicionar Componente
+              </Button>
             </CardContent>
           </Card>
 

@@ -12,6 +12,8 @@ export type ErpProductionStatus = 'draft' | 'pending' | 'in_progress' | 'complet
 export type ErpCommissionStatus = 'pending' | 'approved' | 'paid' | 'cancelled'
 export type ErpUserRole = 'admin' | 'manager' | 'vendedor' | 'financeiro' | 'producao' | 'viewer'
 export type ErpProductType = 'produto_final' | 'insumo' | 'ativo_imobilizado'
+export type ErpProductStructure = 'simples' | 'composto' | 'com_variacoes'
+export type ErpPurchaseOrderStatus = 'draft' | 'sent' | 'partial' | 'received' | 'cancelled'
 
 export interface ErpCompany {
   id: string
@@ -100,6 +102,8 @@ export interface ErpProduct {
   height_cm: number
   width_cm: number
   length_cm: number
+  structure: ErpProductStructure
+  supplier_id: string | null
   category: string | null
   brand: string | null
   material: string | null
@@ -141,6 +145,7 @@ export interface ErpStock {
   product_id: string
   variation_id: string | null
   warehouse_id: string
+  company_id: string | null
   quantity: number
   reserved: number
   min_quantity: number
@@ -151,10 +156,26 @@ export interface ErpStockMovement {
   product_id: string
   variation_id: string | null
   warehouse_id: string
+  company_id: string | null
   quantity: number
   type: 'sale' | 'purchase' | 'production' | 'adjustment' | 'transfer' | 'return'
   reference_type: string | null
   reference_id: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface ErpStockWriteoff {
+  id: string
+  sales_order_id: string
+  order_item_id: string | null
+  product_id: string
+  variation_id: string | null
+  company_id: string
+  warehouse_id: string
+  quantity: number
+  is_mirror: boolean
   notes: string | null
   created_by: string | null
   created_at: string
@@ -317,6 +338,7 @@ export interface ErpProductionWorker {
 export interface ErpPurchaseEntry {
   id: string
   supplier_id: string
+  company_id: string | null
   invoice_number: string | null
   invoice_series: string | null
   invoice_key: string | null
@@ -342,6 +364,30 @@ export interface ErpPurchaseEntryItem {
   quantity: number
   unit_cost: number
   total: number
+}
+
+export interface ErpPurchaseOrder {
+  id: string
+  order_number: number
+  supplier_id: string
+  status: ErpPurchaseOrderStatus
+  expected_date: string | null
+  total_estimated: number
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ErpPurchaseOrderItem {
+  id: string
+  purchase_order_id: string
+  product_id: string
+  variation_id: string | null
+  quantity: number
+  unit_cost_estimated: number
+  quantity_received: number
+  total_estimated: number
 }
 
 export interface ErpCommission {
@@ -411,6 +457,8 @@ export interface Database {
       erp_payment_account_methods: { Row: ErpPaymentAccountMethod; Insert: Partial<ErpPaymentAccountMethod> & Pick<ErpPaymentAccountMethod, 'account_id' | 'payment_method' | 'installment_min' | 'installment_max'>; Update: Partial<ErpPaymentAccountMethod> }
       erp_bom_components: { Row: ErpBomComponent; Insert: Partial<ErpBomComponent> & Pick<ErpBomComponent, 'parent_id' | 'component_id' | 'quantity'>; Update: Partial<ErpBomComponent> }
       erp_production_workers: { Row: ErpProductionWorker; Insert: Partial<ErpProductionWorker> & Pick<ErpProductionWorker, 'name'>; Update: Partial<ErpProductionWorker> }
+      erp_purchase_orders: { Row: ErpPurchaseOrder; Insert: Partial<ErpPurchaseOrder> & Pick<ErpPurchaseOrder, 'supplier_id'>; Update: Partial<ErpPurchaseOrder> }
+      erp_purchase_order_items: { Row: ErpPurchaseOrderItem; Insert: Partial<ErpPurchaseOrderItem> & Pick<ErpPurchaseOrderItem, 'purchase_order_id' | 'product_id' | 'quantity' | 'unit_cost_estimated' | 'total_estimated'>; Update: Partial<ErpPurchaseOrderItem> }
     }
   }
 }

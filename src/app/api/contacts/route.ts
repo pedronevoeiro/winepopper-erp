@@ -1,42 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { contacts } from '@/lib/data'
-import type { ErpContact, ErpContactType } from '@/types/database'
+import { db } from '@/lib/db'
+import type { ErpContactType } from '@/types/database'
 
 // GET /api/contacts?q=xxx&type=customer|supplier
 export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl
-  const query = searchParams.get('q')?.toLowerCase() ?? ''
-  const typeFilter = searchParams.get('type') as ErpContactType | null
+  try {
+    const { searchParams } = request.nextUrl
+    const query = searchParams.get('q')?.toLowerCase() ?? ''
+    const typeFilter = searchParams.get('type') as ErpContactType | null
 
-  let result = [...contacts]
+    let dbQuery = db()
+      .from('erp_contacts')
+      .select('*')
 
-  // Filter by type
-  if (typeFilter && (typeFilter === 'customer' || typeFilter === 'supplier')) {
-    result = result.filter((c) => c.type === typeFilter || c.type === 'both')
-  }
+    // Filter by type
+    if (typeFilter && (typeFilter === 'customer' || typeFilter === 'supplier')) {
+      dbQuery = dbQuery.or(`type.eq.${typeFilter},type.eq.both`)
+    }
 
-  // Search by name, trade_name, document, email, city
-  if (query) {
-    result = result.filter((c) => {
-      const searchable = [
-        c.name,
-        c.trade_name,
-        c.document,
-        c.email,
-        c.city,
-        c.state,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return searchable.includes(query)
+    // Search by name, trade_name, document, email, city
+    if (query) {
+      dbQuery = dbQuery.or(
+        `name.ilike.%${query}%,trade_name.ilike.%${query}%,document.ilike.%${query}%,email.ilike.%${query}%,city.ilike.%${query}%,state.ilike.%${query}%`
+      )
+    }
+
+    const { data, error } = await dbQuery
+
+    if (error) {
+      console.error('GET /api/contacts error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      data: data ?? [],
+      count: data?.length ?? 0,
     })
+  } catch (err) {
+    console.error('GET /api/contacts unexpected error:', err)
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 })
   }
-
-  return NextResponse.json({
-    data: result,
-    count: result.length,
-  })
 }
 
 // POST /api/contacts — create a new contact
@@ -52,8 +55,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const cleanDocument = body.document.replace(/\D/g, '')
+
     // Check for duplicate document
-    const existing = contacts.find((c) => c.document === body.document.replace(/\D/g, ''))
+    const { data: existing } = await db()
+      .from('erp_contacts')
+      .select('id')
+      .eq('document', cleanDocument)
+      .limit(1)
+      .maybeSingle()
+
     if (existing) {
       return NextResponse.json(
         { error: 'Já existe um contato com este documento.' },
@@ -62,39 +73,46 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date().toISOString()
-    const newContact: ErpContact = {
-      id: crypto.randomUUID(),
-      type: body.type ?? 'customer',
-      person_type: body.person_type ?? 'PJ',
-      name: body.name,
-      trade_name: body.trade_name ?? null,
-      document: body.document.replace(/\D/g, ''),
-      state_reg: body.state_reg ?? null,
-      municipal_reg: body.municipal_reg ?? null,
-      email: body.email ?? null,
-      phone: body.phone ?? null,
-      mobile: body.mobile ?? null,
-      website: body.website ?? null,
-      cep: body.cep ?? null,
-      street: body.street ?? null,
-      number: body.number ?? null,
-      complement: body.complement ?? null,
-      neighborhood: body.neighborhood ?? null,
-      city: body.city ?? null,
-      state: body.state ?? null,
-      ibge_code: body.ibge_code ?? null,
-      notes: body.notes ?? null,
-      active: true,
-      salesperson_id: body.salesperson_id ?? null,
-      created_at: now,
-      updated_at: now,
+
+    const { data: newContact, error } = await db()
+      .from('erp_contacts')
+      .insert({
+        type: body.type ?? 'customer',
+        person_type: body.person_type ?? 'PJ',
+        name: body.name,
+        trade_name: body.trade_name ?? null,
+        document: cleanDocument,
+        state_reg: body.state_reg ?? null,
+        municipal_reg: body.municipal_reg ?? null,
+        email: body.email ?? null,
+        phone: body.phone ?? null,
+        mobile: body.mobile ?? null,
+        website: body.website ?? null,
+        cep: body.cep ?? null,
+        street: body.street ?? null,
+        number: body.number ?? null,
+        complement: body.complement ?? null,
+        neighborhood: body.neighborhood ?? null,
+        city: body.city ?? null,
+        state: body.state ?? null,
+        ibge_code: body.ibge_code ?? null,
+        notes: body.notes ?? null,
+        active: true,
+        salesperson_id: body.salesperson_id ?? null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('POST /api/contacts error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Add to in-memory array (won't persist across restarts)
-    contacts.push(newContact)
-
     return NextResponse.json({ data: newContact }, { status: 201 })
-  } catch {
+  } catch (err) {
+    console.error('POST /api/contacts unexpected error:', err)
     return NextResponse.json(
       { error: 'Corpo da requisição inválido.' },
       { status: 400 }

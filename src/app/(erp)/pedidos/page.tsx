@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -61,6 +62,7 @@ const ALL_STATUSES: (ErpOrderStatus | 'all')[] = [
 ]
 
 export default function PedidosPage() {
+  const router = useRouter()
   const [orders, setOrders] = useState<OrderWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -233,7 +235,11 @@ export default function PedidosPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((order) => (
-                  <TableRow key={order.id}>
+                  <TableRow
+                    key={order.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => router.push(`/pedidos/${order.id}`)}
+                  >
                     <TableCell className="font-medium">
                       #{order.order_number}
                     </TableCell>

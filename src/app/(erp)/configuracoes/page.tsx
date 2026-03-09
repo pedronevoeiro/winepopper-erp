@@ -332,6 +332,9 @@ export default function ConfiguracoesPage() {
   const [workerForm, setWorkerForm] = useState<WorkerFormData>(emptyWorkerForm)
   const [submittingWorker, setSubmittingWorker] = useState(false)
   const [workerError, setWorkerError] = useState('')
+  const [customRoles, setCustomRoles] = useState<string[]>([])
+  const [addingNewRole, setAddingNewRole] = useState(false)
+  const [newRoleInput, setNewRoleInput] = useState('')
 
   // Salespeople state
   const [salespeople, setSalespeople] = useState<ErpSalesperson[]>([])
@@ -410,7 +413,15 @@ export default function ConfiguracoesPage() {
     try {
       const res = await fetch('/api/production-workers')
       const json = await res.json()
-      setWorkers(json.data ?? [])
+      const data = json.data ?? []
+      setWorkers(data)
+      // Extract unique roles from existing workers for the dropdown
+      const existingRoles = [...new Set(
+        data.map((w: ErpProductionWorker) => w.role).filter(Boolean)
+      )] as string[]
+      const defaultRoles = ['Operador', 'Supervisor', 'Auxiliar']
+      const extraRoles = existingRoles.filter((r) => !defaultRoles.includes(r))
+      setCustomRoles(extraRoles)
     } catch {
       console.error('Erro ao carregar funcionarios')
     } finally {
@@ -2040,19 +2051,87 @@ export default function ConfiguracoesPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="worker-role">Cargo</Label>
-                <Select
-                  value={workerForm.role}
-                  onValueChange={(v) => handleWorkerFieldChange('role', v)}
-                >
-                  <SelectTrigger id="worker-role" className="w-full">
-                    <SelectValue placeholder="Selecione um cargo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Operador">Operador</SelectItem>
-                    <SelectItem value="Supervisor">Supervisor</SelectItem>
-                    <SelectItem value="Auxiliar">Auxiliar</SelectItem>
-                  </SelectContent>
-                </Select>
+                {addingNewRole ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={newRoleInput}
+                      onChange={(e) => setNewRoleInput(e.target.value)}
+                      placeholder="Digite o novo cargo..."
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (newRoleInput.trim()) {
+                            const newRole = newRoleInput.trim()
+                            if (!customRoles.includes(newRole)) {
+                              setCustomRoles((prev) => [...prev, newRole])
+                            }
+                            handleWorkerFieldChange('role', newRole)
+                            setNewRoleInput('')
+                            setAddingNewRole(false)
+                          }
+                        } else if (e.key === 'Escape') {
+                          setAddingNewRole(false)
+                          setNewRoleInput('')
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        if (newRoleInput.trim()) {
+                          const newRole = newRoleInput.trim()
+                          if (!customRoles.includes(newRole)) {
+                            setCustomRoles((prev) => [...prev, newRole])
+                          }
+                          handleWorkerFieldChange('role', newRole)
+                          setNewRoleInput('')
+                          setAddingNewRole(false)
+                        }
+                      }}
+                    >
+                      OK
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => { setAddingNewRole(false); setNewRoleInput('') }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={workerForm.role}
+                      onValueChange={(v) => handleWorkerFieldChange('role', v)}
+                    >
+                      <SelectTrigger id="worker-role" className="flex-1">
+                        <SelectValue placeholder="Selecione um cargo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Operador">Operador</SelectItem>
+                        <SelectItem value="Supervisor">Supervisor</SelectItem>
+                        <SelectItem value="Auxiliar">Auxiliar</SelectItem>
+                        {customRoles.map((role) => (
+                          <SelectItem key={role} value={role}>{role}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => setAddingNewRole(true)}
+                      title="Adicionar novo cargo"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

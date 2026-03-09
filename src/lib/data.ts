@@ -27,6 +27,8 @@ import type {
   ErpPurchaseEntry,
   ErpPurchaseEntryItem,
   ErpStockMovement,
+  ErpPurchaseOrder,
+  ErpPurchaseOrderItem,
 } from '@/types/database'
 
 // ---------------------------------------------------------------------------
@@ -423,6 +425,8 @@ export const products: ErpProduct[] = [
     name: 'Porta-Vinho Clássico',
     description: 'Porta-vinho em alumínio anodizado com acabamento premium. Personalização a laser.',
     product_type: 'produto_final',
+    structure: 'com_variacoes',
+    supplier_id: '00000000-0000-0000-0001-000000000009',
     cost_price: 28.5,
     sell_price: 89.9,
     weight_grams: 350,
@@ -450,6 +454,8 @@ export const products: ErpProduct[] = [
     name: 'Porta-Vinho Lite Plus',
     description: 'Versão intermediária com design moderno e acabamento fosco. Personalização a laser.',
     product_type: 'produto_final',
+    structure: 'composto',
+    supplier_id: '00000000-0000-0000-0001-000000000009',
     cost_price: 22.0,
     sell_price: 69.9,
     weight_grams: 280,
@@ -477,6 +483,8 @@ export const products: ErpProduct[] = [
     name: 'Porta-Vinho Lite',
     description: 'Versão econômica ideal para grandes volumes. Personalização a laser.',
     product_type: 'produto_final',
+    structure: 'composto',
+    supplier_id: '00000000-0000-0000-0001-000000000009',
     cost_price: 15.0,
     sell_price: 49.9,
     weight_grams: 220,
@@ -505,6 +513,8 @@ export const products: ErpProduct[] = [
     name: 'Tubo de Alumínio 30mm',
     description: 'Tubo de alumínio para corpo do porta-vinho',
     product_type: 'insumo',
+    structure: 'simples',
+    supplier_id: '00000000-0000-0000-0001-000000000010',
     cost_price: 5.50,
     sell_price: 0,
     weight_grams: 180,
@@ -532,6 +542,8 @@ export const products: ErpProduct[] = [
     name: 'Chapa de Alumínio 1mm',
     description: 'Chapa de alumínio para base e tampa do porta-vinho',
     product_type: 'insumo',
+    structure: 'simples',
+    supplier_id: '00000000-0000-0000-0001-000000000010',
     cost_price: 12.00,
     sell_price: 0,
     weight_grams: 500,
@@ -559,6 +571,8 @@ export const products: ErpProduct[] = [
     name: 'Solução de Anodização',
     description: 'Solução química para processo de anodização (litro)',
     product_type: 'insumo',
+    structure: 'simples',
+    supplier_id: '00000000-0000-0000-0001-000000000010',
     cost_price: 45.00,
     sell_price: 0,
     weight_grams: 1100,
@@ -586,6 +600,8 @@ export const products: ErpProduct[] = [
     name: 'Caixa de Embalagem Individual',
     description: 'Caixa de papelão personalizada para porta-vinho',
     product_type: 'insumo',
+    structure: 'simples',
+    supplier_id: null,
     cost_price: 3.20,
     sell_price: 0,
     weight_grams: 80,
@@ -614,6 +630,8 @@ export const products: ErpProduct[] = [
     name: 'Máquina de Gravação a Laser',
     description: 'Máquina CNC para personalização de porta-vinhos com gravação a laser',
     product_type: 'ativo_imobilizado',
+    structure: 'simples',
+    supplier_id: null,
     cost_price: 45000,
     sell_price: 0,
     weight_grams: 85000,
@@ -641,6 +659,8 @@ export const products: ErpProduct[] = [
     name: 'Tanque de Anodização',
     description: 'Tanque para processo de anodização de peças de alumínio',
     product_type: 'ativo_imobilizado',
+    structure: 'simples',
+    supplier_id: null,
     cost_price: 12000,
     sell_price: 0,
     weight_grams: 45000,
@@ -794,6 +814,7 @@ export const stock: ErpStock[] = [
     quantity: 80,
     reserved: 15,
     min_quantity: 20,
+    company_id: null,
   },
   {
     id: '00000000-0000-0000-0006-000000000004',
@@ -803,6 +824,7 @@ export const stock: ErpStock[] = [
     quantity: 45,
     reserved: 10,
     min_quantity: 15,
+    company_id: null,
   },
   {
     id: '00000000-0000-0000-0006-000000000005',
@@ -812,6 +834,7 @@ export const stock: ErpStock[] = [
     quantity: 25,
     reserved: 0,
     min_quantity: 15,
+    company_id: null,
   },
   {
     id: '00000000-0000-0000-0006-000000000002',
@@ -821,6 +844,7 @@ export const stock: ErpStock[] = [
     quantity: 200,
     reserved: 30,
     min_quantity: 50,
+    company_id: null,
   },
   {
     id: '00000000-0000-0000-0006-000000000003',
@@ -830,6 +854,7 @@ export const stock: ErpStock[] = [
     quantity: 350,
     reserved: 100,
     min_quantity: 80,
+    company_id: null,
   },
   // Insumos
   {
@@ -840,6 +865,7 @@ export const stock: ErpStock[] = [
     quantity: 500,
     reserved: 0,
     min_quantity: 100,
+    company_id: null,
   },
   {
     id: '00000000-0000-0000-0006-000000000011',
@@ -849,6 +875,7 @@ export const stock: ErpStock[] = [
     quantity: 80,
     reserved: 0,
     min_quantity: 20,
+    company_id: null,
   },
   {
     id: '00000000-0000-0000-0006-000000000012',
@@ -858,6 +885,7 @@ export const stock: ErpStock[] = [
     quantity: 25,
     reserved: 0,
     min_quantity: 5,
+    company_id: null,
   },
   {
     id: '00000000-0000-0000-0006-000000000013',
@@ -867,6 +895,7 @@ export const stock: ErpStock[] = [
     quantity: 400,
     reserved: 0,
     min_quantity: 100,
+    company_id: null,
   },
 ]
 
@@ -1989,6 +2018,7 @@ export const purchaseEntries: ErpPurchaseEntry[] = [
     status: 'received',
     warehouse_id: '00000000-0000-0000-0005-000000000001',
     notes: 'Lote mensal de alumínio',
+    company_id: null,
     created_by: null,
     created_at: daysAgo(25),
     updated_at: daysAgo(25),
@@ -2008,6 +2038,7 @@ export const purchaseEntries: ErpPurchaseEntry[] = [
     status: 'received',
     warehouse_id: '00000000-0000-0000-0005-000000000001',
     notes: null,
+    company_id: null,
     created_by: null,
     created_at: daysAgo(35),
     updated_at: daysAgo(35),
@@ -2027,6 +2058,59 @@ export const purchaseEntryItems: ErpPurchaseEntryItem[] = [
 // STOCK MOVEMENTS (histórico)
 // ---------------------------------------------------------------------------
 export const stockMovements: ErpStockMovement[] = []
+
+// ---------------------------------------------------------------------------
+// PURCHASE ORDERS (Pedidos de Compra)
+// ---------------------------------------------------------------------------
+export const purchaseOrders: ErpPurchaseOrder[] = [
+  {
+    id: '00000000-0000-0000-0020-000000000001',
+    order_number: 1,
+    supplier_id: '00000000-0000-0000-0001-000000000010',
+    status: 'received',
+    expected_date: daysAgo(10),
+    total_estimated: 2750.00,
+    notes: 'Reposição mensal de tubos e chapas de alumínio',
+    created_by: '00000000-0000-0000-0000-100000000001',
+    created_at: daysAgo(20),
+    updated_at: daysAgo(10),
+  },
+  {
+    id: '00000000-0000-0000-0020-000000000002',
+    order_number: 2,
+    supplier_id: '00000000-0000-0000-0001-000000000010',
+    status: 'sent',
+    expected_date: daysFromNow(7),
+    total_estimated: 4500.00,
+    notes: 'Pedido extra para atender demanda do mês',
+    created_by: '00000000-0000-0000-0000-100000000001',
+    created_at: daysAgo(3),
+    updated_at: daysAgo(3),
+  },
+  {
+    id: '00000000-0000-0000-0020-000000000003',
+    order_number: 3,
+    supplier_id: '00000000-0000-0000-0001-000000000009',
+    status: 'draft',
+    expected_date: daysFromNow(14),
+    total_estimated: 1350.00,
+    notes: null,
+    created_by: '00000000-0000-0000-0000-100000000001',
+    created_at: NOW,
+    updated_at: NOW,
+  },
+]
+
+export const purchaseOrderItems: ErpPurchaseOrderItem[] = [
+  // PO #1 — received
+  { id: '00000000-0000-0000-0021-000000000001', purchase_order_id: '00000000-0000-0000-0020-000000000001', product_id: '00000000-0000-0000-0004-000000000010', variation_id: null, quantity: 500, unit_cost_estimated: 5.50, quantity_received: 500, total_estimated: 2750.00 },
+  // PO #2 — sent (awaiting)
+  { id: '00000000-0000-0000-0021-000000000002', purchase_order_id: '00000000-0000-0000-0020-000000000002', product_id: '00000000-0000-0000-0004-000000000010', variation_id: null, quantity: 300, unit_cost_estimated: 5.50, quantity_received: 0, total_estimated: 1650.00 },
+  { id: '00000000-0000-0000-0021-000000000003', purchase_order_id: '00000000-0000-0000-0020-000000000002', product_id: '00000000-0000-0000-0004-000000000011', variation_id: null, quantity: 200, unit_cost_estimated: 12.00, quantity_received: 0, total_estimated: 2400.00 },
+  { id: '00000000-0000-0000-0021-000000000004', purchase_order_id: '00000000-0000-0000-0020-000000000002', product_id: '00000000-0000-0000-0004-000000000012', variation_id: null, quantity: 10, unit_cost_estimated: 45.00, quantity_received: 0, total_estimated: 450.00 },
+  // PO #3 — draft
+  { id: '00000000-0000-0000-0021-000000000005', purchase_order_id: '00000000-0000-0000-0020-000000000003', product_id: '00000000-0000-0000-0004-000000000013', variation_id: null, quantity: 500, unit_cost_estimated: 2.70, quantity_received: 0, total_estimated: 1350.00 },
+]
 
 // ---------------------------------------------------------------------------
 // AUDIT LOG

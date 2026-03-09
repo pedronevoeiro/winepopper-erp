@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -18,9 +19,10 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatBRL } from '@/lib/constants'
 import { ProductTypeBadge } from '@/components/shared/ProductTypeBadge'
+import { ProductStructureBadge } from '@/components/shared/ProductStructureBadge'
 import { ProducibleIndicator } from '@/components/shared/ProducibleIndicator'
 import { Plus, Package, AlertTriangle, CheckCircle } from 'lucide-react'
-import type { ErpProductType, ErpProductVariation } from '@/types/database'
+import type { ErpProductType, ErpProductStructure, ErpProductVariation } from '@/types/database'
 
 interface ProductWithStock {
   id: string
@@ -28,6 +30,7 @@ interface ProductWithStock {
   name: string
   description: string | null
   product_type: ErpProductType
+  structure: ErpProductStructure
   material: string | null
   sell_price: number
   cost_price: number
@@ -137,7 +140,91 @@ function getDisplaySku(product: ProductWithStock): string {
   return product.sku || '-'
 }
 
+function StockCard({
+  product,
+  variation,
+}: {
+  product: ProductWithStock
+  variation?: ErpProductVariation
+}) {
+  const color = getStockColor(product.stock_available, product.min_quantity)
+  const colors = stockColorMap[color]
+  const maxBar = Math.max(product.stock_available, product.min_quantity, 1)
+  const barWidth = Math.min((product.stock_available / maxBar) * 100, 100)
+  const purposeLabel =
+    product.product_type === 'insumo' ? 'Industrializacao' : 'Venda'
+
+  return (
+    <Card className={`border ${colors.bg}`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="text-base">
+              {product.name}
+              {variation && (
+                <span className="ml-1 text-sm font-normal text-muted-foreground">
+                  - {variation.name}
+                </span>
+              )}
+            </CardTitle>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground font-mono">
+                {variation?.sku || product.sku || '-'}
+              </p>
+              <ProductTypeBadge type={product.product_type} />
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                {purposeLabel}
+              </Badge>
+            </div>
+          </div>
+          {color === 'green' ? (
+            <CheckCircle className={`h-5 w-5 ${colors.text}`} />
+          ) : (
+            <AlertTriangle className={`h-5 w-5 ${colors.text}`} />
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-3">
+          <div className="flex items-center justify-between text-sm mb-1">
+            <span className={`font-semibold ${colors.text}`}>
+              {product.stock_available} disponivel
+            </span>
+            <span className="text-muted-foreground text-xs">
+              min: {product.min_quantity}
+            </span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-gray-200">
+            <div
+              className={`h-2 rounded-full transition-all ${colors.bar}`}
+              style={{ width: `${barWidth}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div>
+            <p className="font-semibold">{product.stock_quantity}</p>
+            <p className="text-muted-foreground">Total</p>
+          </div>
+          <div>
+            <p className="font-semibold">{product.stock_reserved}</p>
+            <p className="text-muted-foreground">Reservado</p>
+          </div>
+          <div>
+            <p className={`font-semibold ${colors.text}`}>
+              {product.stock_available}
+            </p>
+            <p className="text-muted-foreground">Disponivel</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function ProdutosPage() {
+  const router = useRouter()
   const [products, setProducts] = useState<ProductWithStock[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -207,6 +294,7 @@ export default function ProdutosPage() {
                     <TableRow>
                       <TableHead>SKU</TableHead>
                       <TableHead>Nome</TableHead>
+                      <TableHead>Estrutura</TableHead>
                       <TableHead>Material</TableHead>
                       <TableHead className="text-right">Preco Venda</TableHead>
                       <TableHead className="text-right">Estoque</TableHead>
@@ -216,7 +304,7 @@ export default function ProdutosPage() {
                   </TableHeader>
                   <TableBody>
                     {produtosFinais.map((product) => (
-                      <TableRow key={product.id}>
+                      <TableRow key={product.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/produtos/${product.id}`)}>
                         <TableCell className="font-mono text-xs">
                           {getDisplaySku(product)}
                         </TableCell>
@@ -232,6 +320,9 @@ export default function ProdutosPage() {
                               </Badge>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <ProductStructureBadge structure={product.structure} />
                         </TableCell>
                         <TableCell>{product.material || '-'}</TableCell>
                         <TableCell className="text-right">
@@ -281,7 +372,7 @@ export default function ProdutosPage() {
                   </TableHeader>
                   <TableBody>
                     {insumos.map((product) => (
-                      <TableRow key={product.id}>
+                      <TableRow key={product.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/produtos/${product.id}`)}>
                         <TableCell className="font-mono text-xs">
                           {product.sku || '-'}
                         </TableCell>
@@ -326,168 +417,50 @@ export default function ProdutosPage() {
           ) : products.length === 0 ? (
             <EmptyState message="Nenhum produto cadastrado." />
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {products.map((product) => {
-                const hasVariations = product.variations.length > 0
+            <div className="space-y-8">
+              {/* Insumos — Industrialização */}
+              {insumos.length > 0 && (
+                <div>
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-amber-500" />
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      Insumos — Industrializacao
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {insumos.map((product) => (
+                      <StockCard key={product.id} product={product} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                // For products with variations, show a card per variation
-                if (hasVariations) {
-                  return product.variations.map((variation) => {
-                    // Estimate per-variation stock from product totals if individual data not available
-                    // The API returns aggregated stock. For per-variation display we show the variation name.
-                    const varAvailable = product.stock_available
-                    const varMinQty = product.min_quantity
-                    const color = getStockColor(
-                      product.stock_available,
-                      product.min_quantity
-                    )
-                    const colors = stockColorMap[color]
-                    const maxBar = Math.max(product.stock_available, product.min_quantity, 1)
-                    const barWidth = Math.min(
-                      (product.stock_available / maxBar) * 100,
-                      100
-                    )
-
-                    return (
-                      <Card
-                        key={`${product.id}-${variation.id}`}
-                        className={`border ${colors.bg}`}
-                      >
-                        <CardHeader className="pb-3">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <CardTitle className="text-base">
-                                {product.name}
-                                <span className="ml-1 text-sm font-normal text-muted-foreground">
-                                  - {variation.name}
-                                </span>
-                              </CardTitle>
-                              <div className="flex items-center gap-2 mt-1">
-                                <p className="text-xs text-muted-foreground font-mono">
-                                  {variation.sku || product.sku || '-'}
-                                </p>
-                                <ProductTypeBadge type={product.product_type} />
-                              </div>
-                            </div>
-                            {color === 'green' ? (
-                              <CheckCircle className={`h-5 w-5 ${colors.text}`} />
-                            ) : (
-                              <AlertTriangle className={`h-5 w-5 ${colors.text}`} />
-                            )}
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="mb-3">
-                            <div className="flex items-center justify-between text-sm mb-1">
-                              <span className={`font-semibold ${colors.text}`}>
-                                {product.stock_available} disponivel
-                              </span>
-                              <span className="text-muted-foreground text-xs">
-                                min: {product.min_quantity}
-                              </span>
-                            </div>
-                            <div className="h-2 w-full rounded-full bg-gray-200">
-                              <div
-                                className={`h-2 rounded-full transition-all ${colors.bar}`}
-                                style={{ width: `${barWidth}%` }}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                            <div>
-                              <p className="font-semibold">{product.stock_quantity}</p>
-                              <p className="text-muted-foreground">Total</p>
-                            </div>
-                            <div>
-                              <p className="font-semibold">{product.stock_reserved}</p>
-                              <p className="text-muted-foreground">Reservado</p>
-                            </div>
-                            <div>
-                              <p className={`font-semibold ${colors.text}`}>
-                                {product.stock_available}
-                              </p>
-                              <p className="text-muted-foreground">Disponivel</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })
-                }
-
-                // Products without variations
-                const color = getStockColor(
-                  product.stock_available,
-                  product.min_quantity
-                )
-                const colors = stockColorMap[color]
-                const maxBar = Math.max(product.stock_available, product.min_quantity, 1)
-                const barWidth = Math.min(
-                  (product.stock_available / maxBar) * 100,
-                  100
-                )
-
-                return (
-                  <Card key={product.id} className={`border ${colors.bg}`}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-base">
-                            {product.name}
-                          </CardTitle>
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-xs text-muted-foreground font-mono">
-                              {product.sku || '-'}
-                            </p>
-                            <ProductTypeBadge type={product.product_type} />
-                          </div>
-                        </div>
-                        {color === 'green' ? (
-                          <CheckCircle className={`h-5 w-5 ${colors.text}`} />
-                        ) : (
-                          <AlertTriangle className={`h-5 w-5 ${colors.text}`} />
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="mb-3">
-                        <div className="flex items-center justify-between text-sm mb-1">
-                          <span className={`font-semibold ${colors.text}`}>
-                            {product.stock_available} disponivel
-                          </span>
-                          <span className="text-muted-foreground text-xs">
-                            min: {product.min_quantity}
-                          </span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-gray-200">
-                          <div
-                            className={`h-2 rounded-full transition-all ${colors.bar}`}
-                            style={{ width: `${barWidth}%` }}
+              {/* Produtos Acabados — Venda */}
+              {produtosFinais.length > 0 && (
+                <div>
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      Produtos Acabados — Venda
+                    </h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {produtosFinais.map((product) => {
+                      const hasVars = product.variations.length > 0
+                      if (hasVars) {
+                        return product.variations.map((variation) => (
+                          <StockCard
+                            key={`${product.id}-${variation.id}`}
+                            product={product}
+                            variation={variation}
                           />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                        <div>
-                          <p className="font-semibold">{product.stock_quantity}</p>
-                          <p className="text-muted-foreground">Total</p>
-                        </div>
-                        <div>
-                          <p className="font-semibold">{product.stock_reserved}</p>
-                          <p className="text-muted-foreground">Reservado</p>
-                        </div>
-                        <div>
-                          <p className={`font-semibold ${colors.text}`}>
-                            {product.stock_available}
-                          </p>
-                          <p className="text-muted-foreground">Disponivel</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
+                        ))
+                      }
+                      return <StockCard key={product.id} product={product} />
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

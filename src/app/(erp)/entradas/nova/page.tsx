@@ -76,7 +76,19 @@ interface ParsedNFeItem {
 interface ParsedNFe {
   supplier: {
     name: string
+    trade_name: string
     document: string
+    state_reg: string
+    email: string
+    phone: string
+    cep: string
+    street: string
+    number: string
+    complement: string
+    neighborhood: string
+    city: string
+    state: string
+    ibge_code: string
   }
   invoice: {
     number: string
@@ -84,6 +96,7 @@ interface ParsedNFe {
     key: string
     issue_date: string
   }
+  dest_document: string
   items: ParsedNFeItem[]
 }
 
@@ -106,6 +119,7 @@ const entrySchema = z.object({
   invoice_series: z.string().optional(),
   invoice_key: z.string().optional(),
   issue_date: z.string().optional(),
+  company_id: z.string().min(1, 'Selecione a empresa recebedora'),
   supplier_id: z.string().min(1, 'Selecione um fornecedor'),
   warehouse_id: z.string().min(1, 'Selecione um deposito'),
   items: z.array(entryItemSchema).min(1, 'Adicione pelo menos um item'),
@@ -150,13 +164,27 @@ function parseNFeXml(xmlString: string): ParsedNFe | null {
   if (!nfe) return null
 
   const emit = nfe.querySelector('emit')
+  const enderEmit = emit?.querySelector('enderEmit')
+  const dest = nfe.querySelector('dest')
   const ide = nfe.querySelector('ide')
   const dets = nfe.querySelectorAll('det')
 
   return {
     supplier: {
       name: emit?.querySelector('xNome')?.textContent ?? '',
+      trade_name: emit?.querySelector('xFant')?.textContent ?? '',
       document: emit?.querySelector('CNPJ')?.textContent ?? emit?.querySelector('CPF')?.textContent ?? '',
+      state_reg: emit?.querySelector('IE')?.textContent ?? '',
+      email: emit?.querySelector('email')?.textContent ?? '',
+      phone: enderEmit?.querySelector('fone')?.textContent ?? '',
+      cep: enderEmit?.querySelector('CEP')?.textContent ?? '',
+      street: enderEmit?.querySelector('xLgr')?.textContent ?? '',
+      number: enderEmit?.querySelector('nro')?.textContent ?? '',
+      complement: enderEmit?.querySelector('xCpl')?.textContent ?? '',
+      neighborhood: enderEmit?.querySelector('xBairro')?.textContent ?? '',
+      city: enderEmit?.querySelector('xMun')?.textContent ?? '',
+      state: enderEmit?.querySelector('UF')?.textContent ?? '',
+      ibge_code: enderEmit?.querySelector('cMun')?.textContent ?? '',
     },
     invoice: {
       number: ide?.querySelector('nNF')?.textContent ?? '',
@@ -166,6 +194,7 @@ function parseNFeXml(xmlString: string): ParsedNFe | null {
         ?? '',
       issue_date: ide?.querySelector('dhEmi')?.textContent ?? '',
     },
+    dest_document: dest?.querySelector('CNPJ')?.textContent ?? dest?.querySelector('CPF')?.textContent ?? '',
     items: Array.from(dets).map((det) => {
       const prod = det.querySelector('prod')
       return {
@@ -229,6 +258,7 @@ export default function NovaEntradaPage() {
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [products, setProducts] = useState<ProductOption[]>([])
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
+  const [companies, setCompanies] = useState<{ id: string; name: string; trade_name: string | null; document: string }[]>([])
 
   // Upload state
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
@@ -244,6 +274,15 @@ export default function NovaEntradaPage() {
   const [newSupplierPhone, setNewSupplierPhone] = useState('')
   const [newSupplierCity, setNewSupplierCity] = useState('')
   const [newSupplierState, setNewSupplierState] = useState('')
+  const [newSupplierTradeName, setNewSupplierTradeName] = useState('')
+  const [newSupplierStateReg, setNewSupplierStateReg] = useState('')
+  const [newSupplierIsento, setNewSupplierIsento] = useState(false)
+  const [newSupplierCep, setNewSupplierCep] = useState('')
+  const [newSupplierStreet, setNewSupplierStreet] = useState('')
+  const [newSupplierNumber, setNewSupplierNumber] = useState('')
+  const [newSupplierComplement, setNewSupplierComplement] = useState('')
+  const [newSupplierNeighborhood, setNewSupplierNeighborhood] = useState('')
+  const [newSupplierIbgeCode, setNewSupplierIbgeCode] = useState('')
   const [newSupplierSaving, setNewSupplierSaving] = useState(false)
 
   // Product match confirmation state
@@ -270,6 +309,7 @@ export default function NovaEntradaPage() {
       invoice_series: '',
       invoice_key: '',
       issue_date: '',
+      company_id: '',
       supplier_id: '',
       warehouse_id: '',
       items: [],
@@ -339,13 +379,27 @@ export default function NovaEntradaPage() {
       })
       .catch(console.error)
 
-    setWarehouses([
-      {
-        id: '00000000-0000-0000-0005-000000000001',
-        name: 'Deposito Campinas',
-        code: 'CPS01',
-      },
-    ])
+    // Fetch warehouses
+    fetch('/api/warehouses')
+      .then((res) => res.json())
+      .then((json) => {
+        const data = json.data ?? json
+        const items = Array.isArray(data) ? data : []
+        setWarehouses(items.map((w: WarehouseOption) => ({ id: w.id, name: w.name, code: w.code })))
+      })
+      .catch(console.error)
+
+    // Fetch companies
+    fetch('/api/companies')
+      .then((res) => res.json())
+      .then((json) => {
+        const data = json.data ?? json
+        const items = Array.isArray(data) ? data : []
+        setCompanies(items.map((c: { id: string; name: string; trade_name: string | null; document: string }) => ({
+          id: c.id, name: c.name, trade_name: c.trade_name, document: c.document,
+        })))
+      })
+      .catch(console.error)
   }, [fetchSuppliers])
 
   // Set default warehouse once loaded
@@ -358,7 +412,7 @@ export default function NovaEntradaPage() {
   // ---------------------------------------------------------------------------
   // Supplier lookup from chave de acesso
   // ---------------------------------------------------------------------------
-  async function lookupSupplierFromKey(key: string, parsedSupplierName?: string) {
+  async function lookupSupplierFromKey(key: string, parsedSupplier?: ParsedNFe['supplier']) {
     const cnpj = extractCnpjFromKey(key)
     if (!cnpj) return
 
@@ -372,13 +426,22 @@ export default function NovaEntradaPage() {
       if (matchedSupplier) {
         setValue('supplier_id', matchedSupplier.id)
       } else {
-        // Not found — open popup to create new supplier
+        // Not found — open popup to create new supplier with all parsed data
         setNewSupplierDocument(cnpj)
-        setNewSupplierName(parsedSupplierName || '')
-        setNewSupplierEmail('')
-        setNewSupplierPhone('')
-        setNewSupplierCity('')
-        setNewSupplierState('')
+        setNewSupplierName(parsedSupplier?.name || '')
+        setNewSupplierTradeName(parsedSupplier?.trade_name || '')
+        setNewSupplierStateReg(parsedSupplier?.state_reg || '')
+        setNewSupplierIsento(!parsedSupplier?.state_reg || parsedSupplier?.state_reg === 'ISENTO')
+        setNewSupplierEmail(parsedSupplier?.email || '')
+        setNewSupplierPhone(parsedSupplier?.phone || '')
+        setNewSupplierCep(parsedSupplier?.cep || '')
+        setNewSupplierStreet(parsedSupplier?.street || '')
+        setNewSupplierNumber(parsedSupplier?.number || '')
+        setNewSupplierComplement(parsedSupplier?.complement || '')
+        setNewSupplierNeighborhood(parsedSupplier?.neighborhood || '')
+        setNewSupplierCity(parsedSupplier?.city || '')
+        setNewSupplierState(parsedSupplier?.state || '')
+        setNewSupplierIbgeCode(parsedSupplier?.ibge_code || '')
         setNewSupplierOpen(true)
       }
     } finally {
@@ -406,13 +469,21 @@ export default function NovaEntradaPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'supplier',
-          person_type: newSupplierDocument.length <= 11 ? 'PF' : 'PJ',
+          person_type: newSupplierDocument.replace(/\D/g, '').length <= 11 ? 'PF' : 'PJ',
           name: newSupplierName,
+          trade_name: newSupplierTradeName || null,
           document: newSupplierDocument,
+          state_reg: newSupplierIsento ? 'ISENTO' : (newSupplierStateReg || null),
           email: newSupplierEmail || null,
           phone: newSupplierPhone || null,
+          cep: newSupplierCep || null,
+          street: newSupplierStreet || null,
+          number: newSupplierNumber || null,
+          complement: newSupplierComplement || null,
+          neighborhood: newSupplierNeighborhood || null,
           city: newSupplierCity || null,
           state: newSupplierState || null,
+          ibge_code: newSupplierIbgeCode || null,
         }),
       })
 
@@ -512,6 +583,17 @@ export default function NovaEntradaPage() {
           setValue('invoice_series', parsed.invoice.series)
           setValue('invoice_key', parsed.invoice.key)
 
+          // Auto-detect receiving company from dest CNPJ
+          if (parsed.dest_document) {
+            const destDoc = parsed.dest_document.replace(/\D/g, '')
+            const matchedCompany = companies.find(
+              (c) => c.document.replace(/\D/g, '') === destDoc
+            )
+            if (matchedCompany) {
+              setValue('company_id', matchedCompany.id)
+            }
+          }
+
           // Format issue_date for input[type=date]
           if (parsed.invoice.issue_date) {
             const dateStr = parsed.invoice.issue_date.substring(0, 10) // YYYY-MM-DD
@@ -530,13 +612,22 @@ export default function NovaEntradaPage() {
             if (matchedSupplier) {
               setValue('supplier_id', matchedSupplier.id)
             } else {
-              // Open new supplier dialog
+              // Open new supplier dialog with all parsed data
               setNewSupplierDocument(supplierDoc)
               setNewSupplierName(parsed.supplier.name)
-              setNewSupplierEmail('')
-              setNewSupplierPhone('')
-              setNewSupplierCity('')
-              setNewSupplierState('')
+              setNewSupplierTradeName(parsed.supplier.trade_name)
+              setNewSupplierStateReg(parsed.supplier.state_reg)
+              setNewSupplierIsento(!parsed.supplier.state_reg || parsed.supplier.state_reg === 'ISENTO')
+              setNewSupplierEmail(parsed.supplier.email)
+              setNewSupplierPhone(parsed.supplier.phone)
+              setNewSupplierCep(parsed.supplier.cep)
+              setNewSupplierStreet(parsed.supplier.street)
+              setNewSupplierNumber(parsed.supplier.number)
+              setNewSupplierComplement(parsed.supplier.complement)
+              setNewSupplierNeighborhood(parsed.supplier.neighborhood)
+              setNewSupplierCity(parsed.supplier.city)
+              setNewSupplierState(parsed.supplier.state)
+              setNewSupplierIbgeCode(parsed.supplier.ibge_code)
               setNewSupplierOpen(true)
             }
           }
@@ -588,7 +679,7 @@ export default function NovaEntradaPage() {
       setUploadStatus('error')
       setUploadMessage('Formato nao suportado. Envie um arquivo .xml ou .pdf.')
     },
-    [suppliers, products, setValue, replaceItems, newSupplierOpen]
+    [suppliers, products, companies, setValue, replaceItems, newSupplierOpen]
   )
 
   // Reset file input
@@ -608,6 +699,7 @@ export default function NovaEntradaPage() {
 
     try {
       const payload = {
+        company_id: data.company_id,
         supplier_id: data.supplier_id,
         warehouse_id: data.warehouse_id,
         invoice_number: data.invoice_number || undefined,
@@ -825,7 +917,42 @@ export default function NovaEntradaPage() {
         </Card>
 
         {/* ================================================================
-            Section 2: Fornecedor
+            Section 2: Empresa Recebedora
+        ================================================================ */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Empresa Recebedora</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="company_id">
+                Empresa <span className="text-red-500">*</span>
+              </Label>
+              <select
+                id="company_id"
+                {...register('company_id')}
+                className={selectClassName}
+                aria-invalid={!!errors.company_id}
+              >
+                <option value="">Selecione a empresa...</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.trade_name || c.name} — {c.document}
+                  </option>
+                ))}
+              </select>
+              {errors.company_id && (
+                <p className="text-xs text-red-500">{errors.company_id.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Identifica qual empresa recebe a NF. Preenchido automaticamente via XML.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ================================================================
+            Section 3: Fornecedor
         ================================================================ */}
         <Card>
           <CardHeader>
@@ -838,10 +965,19 @@ export default function NovaEntradaPage() {
                 onClick={() => {
                   setNewSupplierName('')
                   setNewSupplierDocument('')
+                  setNewSupplierTradeName('')
+                  setNewSupplierStateReg('')
+                  setNewSupplierIsento(false)
                   setNewSupplierEmail('')
                   setNewSupplierPhone('')
+                  setNewSupplierCep('')
+                  setNewSupplierStreet('')
+                  setNewSupplierNumber('')
+                  setNewSupplierComplement('')
+                  setNewSupplierNeighborhood('')
                   setNewSupplierCity('')
                   setNewSupplierState('')
+                  setNewSupplierIbgeCode('')
                   setNewSupplierOpen(true)
                 }}
               >
@@ -880,6 +1016,19 @@ export default function NovaEntradaPage() {
                     onClick={() => {
                       setNewSupplierName('')
                       setNewSupplierDocument('')
+                      setNewSupplierTradeName('')
+                      setNewSupplierStateReg('')
+                      setNewSupplierIsento(false)
+                      setNewSupplierEmail('')
+                      setNewSupplierPhone('')
+                      setNewSupplierCep('')
+                      setNewSupplierStreet('')
+                      setNewSupplierNumber('')
+                      setNewSupplierComplement('')
+                      setNewSupplierNeighborhood('')
+                      setNewSupplierCity('')
+                      setNewSupplierState('')
+                      setNewSupplierIbgeCode('')
                       setNewSupplierOpen(true)
                     }}
                   >
@@ -1244,7 +1393,7 @@ export default function NovaEntradaPage() {
           Dialog: Novo Fornecedor
       ================================================================ */}
       <Dialog open={newSupplierOpen} onOpenChange={setNewSupplierOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
@@ -1258,30 +1407,72 @@ export default function NovaEntradaPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="new-supplier-name">
-                Razao Social <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="new-supplier-name"
-                placeholder="Nome ou razao social"
-                value={newSupplierName}
-                onChange={(e) => setNewSupplierName(e.target.value)}
-              />
+            {/* Razao Social + Nome Fantasia */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="new-supplier-name">
+                  Razao Social <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="new-supplier-name"
+                  placeholder="Nome ou razao social"
+                  value={newSupplierName}
+                  onChange={(e) => setNewSupplierName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-supplier-trade-name">Nome Fantasia</Label>
+                <Input
+                  id="new-supplier-trade-name"
+                  placeholder="Nome fantasia"
+                  value={newSupplierTradeName}
+                  onChange={(e) => setNewSupplierTradeName(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="new-supplier-document">
-                CNPJ/CPF <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="new-supplier-document"
-                placeholder="00.000.000/0000-00"
-                value={newSupplierDocument}
-                onChange={(e) => setNewSupplierDocument(e.target.value)}
-              />
+            {/* CNPJ + IE */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="new-supplier-document">
+                  CNPJ/CPF <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="new-supplier-document"
+                  placeholder="00.000.000/0000-00"
+                  value={newSupplierDocument}
+                  onChange={(e) => setNewSupplierDocument(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-supplier-state-reg">Inscricao Estadual</Label>
+                <Input
+                  id="new-supplier-state-reg"
+                  placeholder="Inscricao estadual"
+                  value={newSupplierIsento ? 'ISENTO' : newSupplierStateReg}
+                  onChange={(e) => setNewSupplierStateReg(e.target.value)}
+                  disabled={newSupplierIsento}
+                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="new-supplier-isento"
+                    checked={newSupplierIsento}
+                    onChange={(e) => {
+                      setNewSupplierIsento(e.target.checked)
+                      if (e.target.checked) setNewSupplierStateReg('ISENTO')
+                      else setNewSupplierStateReg('')
+                    }}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="new-supplier-isento" className="text-sm text-muted-foreground cursor-pointer">
+                    Isento
+                  </label>
+                </div>
+              </div>
             </div>
 
+            {/* Email + Telefone */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="new-supplier-email">E-mail</Label>
@@ -1304,25 +1495,81 @@ export default function NovaEntradaPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="new-supplier-city">Cidade</Label>
-                <Input
-                  id="new-supplier-city"
-                  placeholder="Cidade"
-                  value={newSupplierCity}
-                  onChange={(e) => setNewSupplierCity(e.target.value)}
-                />
+            {/* Endereco section */}
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium mb-3">Endereco</p>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="new-supplier-cep">CEP</Label>
+                  <Input
+                    id="new-supplier-cep"
+                    placeholder="00000-000"
+                    value={newSupplierCep}
+                    onChange={(e) => setNewSupplierCep(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="new-supplier-street">Rua</Label>
+                  <Input
+                    id="new-supplier-street"
+                    placeholder="Nome da rua"
+                    value={newSupplierStreet}
+                    onChange={(e) => setNewSupplierStreet(e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-supplier-state">UF</Label>
-                <Input
-                  id="new-supplier-state"
-                  placeholder="SP"
-                  maxLength={2}
-                  value={newSupplierState}
-                  onChange={(e) => setNewSupplierState(e.target.value.toUpperCase())}
-                />
+
+              <div className="grid gap-4 sm:grid-cols-4 mt-3">
+                <div className="space-y-2">
+                  <Label htmlFor="new-supplier-number">Numero</Label>
+                  <Input
+                    id="new-supplier-number"
+                    placeholder="123"
+                    value={newSupplierNumber}
+                    onChange={(e) => setNewSupplierNumber(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-supplier-complement">Complemento</Label>
+                  <Input
+                    id="new-supplier-complement"
+                    placeholder="Sala, andar..."
+                    value={newSupplierComplement}
+                    onChange={(e) => setNewSupplierComplement(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-supplier-neighborhood">Bairro</Label>
+                  <Input
+                    id="new-supplier-neighborhood"
+                    placeholder="Bairro"
+                    value={newSupplierNeighborhood}
+                    onChange={(e) => setNewSupplierNeighborhood(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-supplier-city">Cidade</Label>
+                  <Input
+                    id="new-supplier-city"
+                    placeholder="Cidade"
+                    value={newSupplierCity}
+                    onChange={(e) => setNewSupplierCity(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-4 mt-3">
+                <div className="space-y-2">
+                  <Label htmlFor="new-supplier-state">UF</Label>
+                  <Input
+                    id="new-supplier-state"
+                    placeholder="SP"
+                    maxLength={2}
+                    value={newSupplierState}
+                    onChange={(e) => setNewSupplierState(e.target.value.toUpperCase())}
+                  />
+                </div>
               </div>
             </div>
           </div>

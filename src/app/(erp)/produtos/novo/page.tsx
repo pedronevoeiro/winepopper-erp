@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { ArrowLeft, Plus, X, ImagePlus } from 'lucide-react'
-import type { ErpProductType } from '@/types/database'
+import type { ErpProductType, ErpProductStructure, ErpContact } from '@/types/database'
 
 // ---------------------------------------------------------------------------
 // Zod Schema
@@ -42,6 +42,8 @@ const imageEntrySchema = z.object({
 const productSchema = z
   .object({
     product_type: z.enum(['produto_final', 'insumo', 'ativo_imobilizado']).default('produto_final'),
+    structure: z.enum(['simples', 'composto', 'com_variacoes']).default('simples'),
+    supplier_id: z.string().optional(),
     has_variations: z.boolean().default(false),
     sku: z.string().optional(),
     name: z.string().min(1, 'Nome e obrigatorio'),
@@ -100,6 +102,13 @@ interface InsumoOption {
   id: string
   name: string
   sku: string | null
+  cost_price: number
+}
+
+interface SupplierOption {
+  id: string
+  name: string
+  document: string
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +125,7 @@ export default function NovoProdutoPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [insumos, setInsumos] = useState<InsumoOption[]>([])
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const {
@@ -129,6 +139,8 @@ export default function NovoProdutoPage() {
     resolver: zodResolver(productSchema) as unknown as Resolver<ProductFormData>,
     defaultValues: {
       product_type: 'produto_final',
+      structure: 'simples',
+      supplier_id: '',
       has_variations: false,
       sku: '',
       name: '',
@@ -172,28 +184,52 @@ export default function NovoProdutoPage() {
   } = useFieldArray({ control, name: 'images' })
 
   const productType = watch('product_type')
+  const structureVal = watch('structure')
   const hasVariations = watch('has_variations')
   const isProdutoFinal = productType === 'produto_final'
+  const showBom = structureVal === 'composto' || structureVal === 'com_variacoes'
+  const showVariations = structureVal === 'com_variacoes'
+
+  // Sync has_variations with structure
+  useEffect(() => {
+    if (structureVal === 'com_variacoes') {
+      setValue('has_variations', true)
+    } else {
+      setValue('has_variations', false)
+    }
+  }, [structureVal, setValue])
 
   // Fetch insumos for BOM select
   useEffect(() => {
-    if (isProdutoFinal) {
+    if (showBom) {
       fetch('/api/products?type=insumo')
         .then((res) => res.json())
         .then((json) => {
           const data = json.data ?? json
           const items = Array.isArray(data) ? data : []
           setInsumos(
-            items.map((p: { id: string; name: string; sku: string | null }) => ({
+            items.map((p: { id: string; name: string; sku: string | null; cost_price: number }) => ({
               id: p.id,
               name: p.name,
               sku: p.sku,
+              cost_price: p.cost_price ?? 0,
             }))
           )
         })
         .catch(console.error)
     }
-  }, [isProdutoFinal])
+  }, [showBom])
+
+  // Fetch suppliers
+  useEffect(() => {
+    fetch('/api/contacts?type=supplier')
+      .then((r) => r.json())
+      .then((json) => {
+        const data = Array.isArray(json) ? json : json.data ?? []
+        setSuppliers(data.map((c: ErpContact) => ({ id: c.id, name: c.name, document: c.document })))
+      })
+      .catch(() => {})
+  }, [])
 
   // Reset variations when toggling off
   useEffect(() => {
@@ -202,13 +238,12 @@ export default function NovoProdutoPage() {
     }
   }, [hasVariations, setValue])
 
-  // Reset BOM when not produto_final
+  // Reset BOM when structure doesn't support it
   useEffect(() => {
-    if (!isProdutoFinal) {
+    if (!showBom) {
       setValue('bom_components', [])
-      setValue('has_variations', false)
     }
-  }, [isProdutoFinal, setValue])
+  }, [showBom, setValue])
 
   // Handle image file selection
   function handleImageFiles(files: FileList | null) {
@@ -236,6 +271,8 @@ export default function NovoProdutoPage() {
       // Build the payload
       const payload: Record<string, unknown> = {
         product_type: data.product_type,
+        structure: data.structure,
+        supplier_id: data.supplier_id || null,
         name: data.name,
         description: data.description || undefined,
         material: data.material || undefined,
@@ -326,7 +363,7 @@ export default function NovoProdutoPage() {
             <CardTitle>Tipo de Produto</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="product_type">
                   Tipo <span className="text-red-500">*</span>
@@ -341,6 +378,31 @@ export default function NovoProdutoPage() {
                   <option value="ativo_imobilizado">Ativo Imobilizado</option>
                 </select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="structure">Estrutura</Label>
+                <select
+                  id="structure"
+                  {...register('structure')}
+                  className={selectClassName}
+                >
+                  <option value="simples">Simples</option>
+                  <option value="composto">Composto (com BOM)</option>
+                  <option value="com_variacoes">Com Variacoes</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="supplier_id">Fornecedor</Label>
+                <select
+                  id="supplier_id"
+                  {...register('supplier_id')}
+                  className={selectClassName}
+                >
+                  <option value="">Nenhum</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -353,23 +415,10 @@ export default function NovoProdutoPage() {
             <CardTitle>Informacoes Basicas</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Variations toggle — only for produto_final */}
-            {isProdutoFinal && (
-              <div className="flex items-center gap-3">
-                <Controller
-                  control={control}
-                  name="has_variations"
-                  render={({ field }) => (
-                    <Switch
-                      id="has_variations"
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  )}
-                />
-                <Label htmlFor="has_variations" className="cursor-pointer">
-                  Possui variacoes (ex: cores, tamanhos)
-                </Label>
+            {/* Variations info — controlled by structure field */}
+            {showVariations && (
+              <div className="rounded-md border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+                Variacoes habilitadas pela estrutura &quot;Com Variacoes&quot;. Adicione as variacoes abaixo.
               </div>
             )}
 
@@ -445,7 +494,7 @@ export default function NovoProdutoPage() {
         {/* ================================================================
             Section 3: Variacoes (only when toggle is on)
         ================================================================ */}
-        {hasVariations && (
+        {showVariations && (
           <Card>
             <CardHeader>
               <CardTitle>Variacoes</CardTitle>
@@ -718,9 +767,9 @@ export default function NovoProdutoPage() {
         </Card>
 
         {/* ================================================================
-            Section 7: Composicao (BOM) — only for produto_final
+            Section 7: Composicao (BOM) — for composto / com_variacoes
         ================================================================ */}
-        {isProdutoFinal && (
+        {showBom && (
           <Card>
             <CardHeader>
               <CardTitle>Composicao (Lista de Materiais)</CardTitle>
@@ -730,66 +779,103 @@ export default function NovoProdutoPage() {
                 Defina quais insumos sao necessarios para produzir uma unidade deste produto.
               </p>
 
-              {bomFields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className="relative grid gap-3 rounded-md border p-4 md:grid-cols-3"
-                >
-                  <button
-                    type="button"
-                    onClick={() => removeBom(index)}
-                    className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    title="Remover componente"
+              {bomFields.map((field, index) => {
+                const selectedInsumo = insumos.find(
+                  (ins) => ins.id === watch(`bom_components.${index}.component_id`)
+                )
+                const qty = watch(`bom_components.${index}.quantity`) || 0
+                const lineCost = selectedInsumo ? selectedInsumo.cost_price * qty : 0
+
+                return (
+                  <div
+                    key={field.id}
+                    className="relative grid gap-3 rounded-md border p-4 md:grid-cols-4"
                   >
-                    <X className="h-4 w-4" />
-                  </button>
-
-                  {/* Insumo select */}
-                  <div className="space-y-1 md:col-span-2">
-                    <Label className="text-xs">
-                      Insumo <span className="text-red-500">*</span>
-                    </Label>
-                    <select
-                      {...register(`bom_components.${index}.component_id`)}
-                      className={selectClassName}
-                      aria-invalid={!!errors.bom_components?.[index]?.component_id}
+                    <button
+                      type="button"
+                      onClick={() => removeBom(index)}
+                      className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      title="Remover componente"
                     >
-                      <option value="">Selecione um insumo...</option>
-                      {insumos.map((ins) => (
-                        <option key={ins.id} value={ins.id}>
-                          {ins.sku ? `[${ins.sku}] ` : ''}
-                          {ins.name}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.bom_components?.[index]?.component_id && (
-                      <p className="text-xs text-red-500">
-                        {errors.bom_components[index].component_id?.message}
-                      </p>
-                    )}
-                  </div>
+                      <X className="h-4 w-4" />
+                    </button>
 
-                  {/* Quantidade */}
-                  <div className="space-y-1">
-                    <Label className="text-xs">
-                      Qtd por unidade <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      placeholder="1"
-                      {...register(`bom_components.${index}.quantity`)}
-                      aria-invalid={!!errors.bom_components?.[index]?.quantity}
-                    />
-                    {errors.bom_components?.[index]?.quantity && (
-                      <p className="text-xs text-red-500">
-                        {errors.bom_components[index].quantity?.message}
-                      </p>
-                    )}
+                    {/* Insumo select */}
+                    <div className="space-y-1 md:col-span-2">
+                      <Label className="text-xs">
+                        Insumo <span className="text-red-500">*</span>
+                      </Label>
+                      <select
+                        {...register(`bom_components.${index}.component_id`)}
+                        className={selectClassName}
+                        aria-invalid={!!errors.bom_components?.[index]?.component_id}
+                      >
+                        <option value="">Selecione um insumo...</option>
+                        {insumos.map((ins) => (
+                          <option key={ins.id} value={ins.id}>
+                            {ins.sku ? `[${ins.sku}] ` : ''}
+                            {ins.name} — R$ {ins.cost_price.toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.bom_components?.[index]?.component_id && (
+                        <p className="text-xs text-red-500">
+                          {errors.bom_components[index].component_id?.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Quantidade */}
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        Qtd por unidade <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="1"
+                        {...register(`bom_components.${index}.quantity`)}
+                        aria-invalid={!!errors.bom_components?.[index]?.quantity}
+                      />
+                      {errors.bom_components?.[index]?.quantity && (
+                        <p className="text-xs text-red-500">
+                          {errors.bom_components[index].quantity?.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Custo da linha */}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Custo</Label>
+                      <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm">
+                        R$ {lineCost.toFixed(2)}
+                      </div>
+                    </div>
                   </div>
+                )
+              })}
+
+              {/* BOM cost summary */}
+              {bomFields.length > 0 && (
+                <div className="rounded-md border border-teal-200 bg-teal-50 px-4 py-3">
+                  <p className="text-sm font-medium text-teal-800">
+                    Custo de Producao Estimado: R${' '}
+                    {bomFields
+                      .reduce((sum, _field, idx) => {
+                        const ins = insumos.find(
+                          (i) => i.id === watch(`bom_components.${idx}.component_id`)
+                        )
+                        const q = watch(`bom_components.${idx}.quantity`) || 0
+                        return sum + (ins ? ins.cost_price * q : 0)
+                      }, 0)
+                      .toFixed(2)}
+                  </p>
+                  <p className="mt-1 text-xs text-teal-600">
+                    Soma dos custos unitarios × quantidade de cada componente.
+                  </p>
                 </div>
-              ))}
+              )}
 
               {insumos.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">
@@ -874,7 +960,7 @@ export default function NovoProdutoPage() {
                     </p>
 
                     {/* Variation assignment — only when has variations */}
-                    {hasVariations && variationFields.length > 0 && (
+                    {showVariations && variationFields.length > 0 && (
                       <select
                         {...register(`images.${index}.variation_assignment`)}
                         className={`${selectClassName} text-xs`}

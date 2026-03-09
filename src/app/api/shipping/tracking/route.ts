@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { trackShipments, isConfigured } from '@/lib/melhor-envio'
-import { salesOrders } from '@/lib/data'
+import { db } from '@/lib/db'
 
 // POST /api/shipping/tracking
 // Body: { melhorenvio_ids: string[] }
@@ -22,26 +22,36 @@ export async function POST(request: Request) {
   }
 
   try {
+    const supabase = db()
     const trackingData = await trackShipments(body.melhorenvio_ids)
 
-    // Update in-memory orders with latest tracking status
+    // Update orders with latest tracking status
     for (const [meId, info] of Object.entries(trackingData)) {
-      const orderIdx = salesOrders.findIndex((o) => o.melhorenvio_id === meId)
-      if (orderIdx !== -1) {
-        const order = salesOrders[orderIdx]
+      // Fetch the order by melhorenvio_id
+      const { data: order } = await supabase
+        .from('erp_sales_orders')
+        .select('id, status, shipping_tracking')
+        .eq('melhorenvio_id', meId)
+        .single()
+
+      if (order) {
+        const updatePayload: Record<string, unknown> = {}
+
         if (info.tracking && info.tracking !== order.shipping_tracking) {
-          salesOrders[orderIdx] = {
-            ...order,
-            shipping_tracking: info.tracking,
-            updated_at: new Date().toISOString(),
-          }
+          updatePayload.shipping_tracking = info.tracking
+          updatePayload.updated_at = new Date().toISOString()
         }
+
         if (info.status === 'delivered' && order.status === 'shipped') {
-          salesOrders[orderIdx] = {
-            ...salesOrders[orderIdx],
-            status: 'delivered',
-            updated_at: new Date().toISOString(),
-          }
+          updatePayload.status = 'delivered'
+          updatePayload.updated_at = new Date().toISOString()
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          await supabase
+            .from('erp_sales_orders')
+            .update(updatePayload)
+            .eq('id', order.id)
         }
       }
     }
