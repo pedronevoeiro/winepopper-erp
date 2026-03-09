@@ -85,13 +85,6 @@ const integrations: Integration[] = [
     details: 'Configure seu token OAuth no .env.local',
   },
   {
-    name: 'NF-e Provider',
-    description: 'Emissao de notas fiscais eletronicas (Focus NFe / Notaas)',
-    icon: FileText,
-    connected: false,
-    details: 'Selecione e configure o provedor de NF-e',
-  },
-  {
     name: 'Resend',
     description: 'Envio de e-mails transacionais e notificacoes',
     icon: Mail,
@@ -386,6 +379,18 @@ export default function ConfiguracoesPage() {
   const [auditLogEntries, setAuditLogEntries] = useState<AuditLogEntry[]>([])
   const [loadingAuditLog, setLoadingAuditLog] = useState(false)
 
+  // Bling credentials state
+  const [blingCredentials, setBlingCredentials] = useState<Array<{
+    id: string
+    company_id: string
+    client_id: string
+    connected: boolean
+  }>>([])
+  const [blingDialogOpen, setBlingDialogOpen] = useState(false)
+  const [blingForm, setBlingForm] = useState({ company_id: '', client_id: '', client_secret: '' })
+  const [submittingBling, setSubmittingBling] = useState(false)
+  const [blingError, setBlingError] = useState('')
+
   // ------- Fetch companies -------
   const fetchCompanies = useCallback(async () => {
     setLoadingCompanies(true)
@@ -478,6 +483,17 @@ export default function ConfiguracoesPage() {
     }
   }, [])
 
+  // ------- Fetch Bling credentials -------
+  const fetchBlingCredentials = useCallback(async () => {
+    try {
+      const res = await fetch('/api/bling/credentials')
+      const json = await res.json()
+      setBlingCredentials(json.data ?? [])
+    } catch {
+      console.error('Erro ao carregar credenciais Bling')
+    }
+  }, [])
+
   useEffect(() => {
     fetchCompanies()
     fetchUsers()
@@ -485,11 +501,46 @@ export default function ConfiguracoesPage() {
     fetchWorkers()
     fetchSalespeople()
     fetchWarehouses()
-  }, [fetchCompanies, fetchUsers, fetchAccounts, fetchWorkers, fetchSalespeople, fetchWarehouses])
+    fetchBlingCredentials()
+  }, [fetchCompanies, fetchUsers, fetchAccounts, fetchWorkers, fetchSalespeople, fetchWarehouses, fetchBlingCredentials])
 
   // ------- Company form handlers -------
   function handleCompanyFieldChange(field: keyof CompanyFormData, value: string) {
     setCompanyForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  // ------- Bling credential handlers -------
+  async function handleBlingSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setBlingError('')
+
+    if (!blingForm.company_id || !blingForm.client_id.trim() || !blingForm.client_secret.trim()) {
+      setBlingError('Preencha todos os campos.')
+      return
+    }
+
+    setSubmittingBling(true)
+    try {
+      const res = await fetch('/api/bling/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(blingForm),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setBlingError(json.error || 'Erro ao salvar credenciais.')
+        return
+      }
+
+      setBlingDialogOpen(false)
+      setBlingForm({ company_id: '', client_id: '', client_secret: '' })
+      await fetchBlingCredentials()
+    } catch {
+      setBlingError('Erro de conexao.')
+    } finally {
+      setSubmittingBling(false)
+    }
   }
 
   async function handleCompanySubmit(e: React.FormEvent) {
@@ -1169,9 +1220,105 @@ export default function ConfiguracoesPage() {
         </TabsContent>
 
         {/* ============================================================= */}
-        {/* Integrations Tab (unchanged)                                   */}
+        {/* Integrations Tab                                                */}
         {/* ============================================================= */}
-        <TabsContent value="integracoes" className="mt-4">
+        <TabsContent value="integracoes" className="mt-4 space-y-6">
+          {/* Bling NF-e Card — dynamic per company */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">Bling NF-e</CardTitle>
+                    <CardDescription className="mt-0.5 text-xs">
+                      Emissao de notas fiscais eletronicas via Bling API v3
+                    </CardDescription>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setBlingForm({ company_id: '', client_id: '', client_secret: '' })
+                    setBlingError('')
+                    setBlingDialogOpen(true)
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Credenciais
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {companies.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma empresa cadastrada.</p>
+              ) : (
+                <div className="space-y-3">
+                  {companies.map((company) => {
+                    const cred = blingCredentials.find((c) => c.company_id === company.id)
+                    const isConnected = cred?.connected === true
+                    const hasCredentials = !!cred
+
+                    return (
+                      <div
+                        key={company.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div>
+                          <p className="font-medium text-sm">{company.trade_name || company.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {hasCredentials ? `Client ID: ${cred.client_id.slice(0, 16)}...` : 'Sem credenciais'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isConnected ? (
+                            <Badge
+                              variant="secondary"
+                              className="border-0 bg-green-100 text-green-800 font-medium"
+                            >
+                              <CheckCircle className="mr-1 h-3 w-3" />
+                              Conectado
+                            </Badge>
+                          ) : hasCredentials ? (
+                            <>
+                              <Badge
+                                variant="secondary"
+                                className="border-0 bg-amber-100 text-amber-800 font-medium"
+                              >
+                                <XCircle className="mr-1 h-3 w-3" />
+                                Desconectado
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  window.location.href = `/api/bling/authorize?company_id=${company.id}`
+                                }}
+                              >
+                                Conectar Bling
+                              </Button>
+                            </>
+                          ) : (
+                            <Badge
+                              variant="secondary"
+                              className="border-0 bg-gray-100 text-gray-600 font-medium"
+                            >
+                              <XCircle className="mr-1 h-3 w-3" />
+                              Nao configurado
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Other integrations (static) */}
           <div className="grid gap-4 md:grid-cols-2">
             {integrations.map((integration) => {
               const Icon = integration.icon
@@ -2852,6 +2999,76 @@ export default function ConfiguracoesPage() {
               <Button type="submit" disabled={submittingWarehouse}>
                 {submittingWarehouse && <Loader2 className="h-4 w-4 animate-spin" />}
                 Salvar Deposito
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bling Credentials Dialog */}
+      <Dialog open={blingDialogOpen} onOpenChange={setBlingDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Credenciais Bling</DialogTitle>
+            <DialogDescription>
+              Cadastre o Client ID e Client Secret da conta Bling para a empresa selecionada.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBlingSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <Label>Empresa</Label>
+              <Select
+                value={blingForm.company_id}
+                onValueChange={(v) => setBlingForm((prev) => ({ ...prev, company_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.trade_name || c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Client ID</Label>
+              <Input
+                value={blingForm.client_id}
+                onChange={(e) => setBlingForm((prev) => ({ ...prev, client_id: e.target.value }))}
+                placeholder="Cole o Client ID do app Bling"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Client Secret</Label>
+              <Input
+                type="password"
+                value={blingForm.client_secret}
+                onChange={(e) => setBlingForm((prev) => ({ ...prev, client_secret: e.target.value }))}
+                placeholder="Cole o Client Secret do app Bling"
+              />
+            </div>
+
+            {blingError && (
+              <p className="text-sm text-destructive">{blingError}</p>
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBlingDialogOpen(false)}
+                disabled={submittingBling}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={submittingBling}>
+                {submittingBling && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                Salvar
               </Button>
             </DialogFooter>
           </form>

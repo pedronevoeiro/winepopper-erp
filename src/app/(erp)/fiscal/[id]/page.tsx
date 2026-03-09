@@ -32,9 +32,9 @@ import {
   User,
   DollarSign,
   Send,
-  CheckCircle2,
   XCircle,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react'
 import type { ErpInvoiceStatus } from '@/types/database'
 
@@ -225,6 +225,76 @@ export default function FiscalDetalhePage({ params }: { params: Promise<{ id: st
     }
   }
 
+  async function handleEmit() {
+    setActionLoading(true)
+    setMessage(null)
+
+    try {
+      // Save editable fields before emitting
+      const saveBody: Record<string, unknown> = {}
+      if (editNumber) saveBody.number = Number(editNumber)
+      saveBody.series = Number(editSeries) || 1
+
+      if (Object.keys(saveBody).length > 0) {
+        await fetch(`/api/invoices/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saveBody),
+        })
+      }
+
+      const res = await fetch(`/api/invoices/${id}/emit`, { method: 'POST' })
+      const json = await res.json()
+
+      if (res.ok) {
+        setInvoice((prev) => (prev ? { ...prev, ...json.data, items: prev.items } : prev))
+        setMessage({
+          type: 'success',
+          text: 'NF-e enviada ao Bling e submetida a Sefaz. Use "Verificar Status" para acompanhar.',
+        })
+      } else {
+        setMessage({ type: 'error', text: json.error || 'Erro ao emitir NF-e.' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexao. Tente novamente.' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleCheckStatus() {
+    setActionLoading(true)
+    setMessage(null)
+
+    try {
+      const res = await fetch(`/api/invoices/${id}/status`)
+      const json = await res.json()
+
+      if (res.ok) {
+        const data = json.data
+        setInvoice((prev) => (prev ? { ...prev, ...data, items: prev.items } : prev))
+        if (data) populateEditFields(data)
+
+        const statusLabel = INVOICE_STATUS_LABELS[data.status as ErpInvoiceStatus] ?? data.status
+        let statusMsg = `Status Bling: ${statusLabel}.`
+        if (json.bling?.motivo) {
+          statusMsg += ` Motivo: ${json.bling.motivo}`
+        }
+
+        setMessage({
+          type: data.status === 'denied' ? 'error' : 'success',
+          text: statusMsg,
+        })
+      } else {
+        setMessage({ type: 'error', text: json.error || 'Erro ao verificar status.' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexao. Tente novamente.' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -348,7 +418,7 @@ export default function FiscalDetalhePage({ params }: { params: Promise<{ id: st
               {isDraft && (
                 <Button
                   size="sm"
-                  onClick={() => handleStatusChange('processing')}
+                  onClick={handleEmit}
                   disabled={actionLoading}
                 >
                   {actionLoading ? (
@@ -356,34 +426,23 @@ export default function FiscalDetalhePage({ params }: { params: Promise<{ id: st
                   ) : (
                     <Send className="mr-2 h-4 w-4" />
                   )}
-                  Processar
+                  Emitir NF-e
                 </Button>
               )}
 
               {isProcessing && (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={() => handleStatusChange('authorized')}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                    )}
-                    Autorizar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => handleStatusChange('denied')}
-                    disabled={actionLoading}
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Rejeitar
-                  </Button>
-                </>
+                <Button
+                  size="sm"
+                  onClick={handleCheckStatus}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Verificar Status
+                </Button>
               )}
 
               {isAuthorized && (
@@ -655,16 +714,6 @@ export default function FiscalDetalhePage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      {/* Info about Sefaz integration */}
-      <Card className="border-amber-200 bg-amber-50">
-        <CardContent className="pt-6">
-          <p className="text-sm text-amber-800">
-            <strong>Nota:</strong> As ações de processar, autorizar, rejeitar e cancelar atualmente
-            apenas alteram o status localmente. A integração com a Sefaz (transmissão real da NF-e)
-            será implementada em breve.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   )
 }

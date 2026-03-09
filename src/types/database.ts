@@ -424,6 +424,19 @@ export interface ErpSetting {
   value: unknown
 }
 
+export interface ErpBlingCredentials {
+  id: string
+  company_id: string
+  client_id: string
+  client_secret: string
+  access_token: string | null
+  refresh_token: string | null
+  expires_at: string | null
+  connected: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface ErpPaymentAccount {
   id: string
   name: string           // e.g., "Pagar.me", "Inter", "Bradesco"
@@ -475,6 +488,7 @@ export interface Database {
       erp_production_workers: { Row: ErpProductionWorker; Insert: Partial<ErpProductionWorker> & Pick<ErpProductionWorker, 'name'>; Update: Partial<ErpProductionWorker> }
       erp_purchase_orders: { Row: ErpPurchaseOrder; Insert: Partial<ErpPurchaseOrder> & Pick<ErpPurchaseOrder, 'supplier_id'>; Update: Partial<ErpPurchaseOrder> }
       erp_purchase_order_items: { Row: ErpPurchaseOrderItem; Insert: Partial<ErpPurchaseOrderItem> & Pick<ErpPurchaseOrderItem, 'purchase_order_id' | 'product_id' | 'quantity' | 'unit_cost_estimated' | 'total_estimated'>; Update: Partial<ErpPurchaseOrderItem> }
+      erp_bling_credentials: { Row: ErpBlingCredentials; Insert: Partial<ErpBlingCredentials> & Pick<ErpBlingCredentials, 'company_id' | 'client_id' | 'client_secret'>; Update: Partial<ErpBlingCredentials> }
     }
   }
 }
