@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, use } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -18,11 +19,30 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   formatBRL,
   formatDate,
+  ORDER_STATUS_LABELS,
 } from '@/lib/constants'
-import { ArrowLeft, Package, Building2, CheckCircle2, Loader2 } from 'lucide-react'
-import type { ErpOrderStatus } from '@/types/database'
+import {
+  ArrowLeft,
+  Package,
+  Building2,
+  CheckCircle2,
+  Loader2,
+  Save,
+  Trash2,
+  User,
+  MapPin,
+  CreditCard,
+} from 'lucide-react'
+import type { ErpOrderStatus, ErpPaymentMethod } from '@/types/database'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,9 +60,32 @@ interface OrderDetail {
   total: number
   payment_method: string | null
   payment_condition: string | null
+  installments: number | null
+  carrier_name: string | null
+  shipping_tracking: string | null
+  shipping_address: string | null
+  shipping_method: string | null
+  pagarme_id: string | null
   notes: string | null
+  internal_notes: string | null
   company_id: string | null
-  contact?: { id: string; name: string; document: string; email: string | null; phone: string | null }
+  sales_channel: string | null
+  store_name: string | null
+  contact?: {
+    id: string
+    name: string
+    document: string
+    email: string | null
+    phone: string | null
+    mobile: string | null
+    cep: string | null
+    street: string | null
+    number: string | null
+    complement: string | null
+    neighborhood: string | null
+    city: string | null
+    state: string | null
+  }
   salesperson?: { name: string }
   company?: { id: string; name: string; trade_name: string | null; document: string }
   items?: OrderItem[]
@@ -106,13 +149,52 @@ interface ExistingWriteoff {
   created_at: string
 }
 
+const ALL_STATUSES: ErpOrderStatus[] = [
+  'draft',
+  'pending',
+  'approved',
+  'in_production',
+  'ready',
+  'shipped',
+  'delivered',
+  'cancelled',
+  'returned',
+]
+
+const PAYMENT_METHODS: { value: ErpPaymentMethod; label: string }[] = [
+  { value: 'pix', label: 'PIX' },
+  { value: 'boleto', label: 'Boleto' },
+  { value: 'credit_card', label: 'Cartao de Credito' },
+  { value: 'transfer', label: 'Transferencia' },
+  { value: 'cash', label: 'Dinheiro' },
+  { value: 'check', label: 'Cheque' },
+  { value: 'other', label: 'Outro' },
+]
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 export default function PedidoDetalhePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  // Editable fields
+  const [editStatus, setEditStatus] = useState<ErpOrderStatus>('pending')
+  const [editPaymentMethod, setEditPaymentMethod] = useState<string>('')
+  const [editInstallments, setEditInstallments] = useState<number>(1)
+  const [editCarrierName, setEditCarrierName] = useState<string>('')
+  const [editShippingTracking, setEditShippingTracking] = useState<string>('')
+  const [editNotes, setEditNotes] = useState<string>('')
+  const [editInternalNotes, setEditInternalNotes] = useState<string>('')
+
+  // Writeoff state
   const [companies, setCompanies] = useState<CompanyOption[]>([])
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([])
   const [products, setProducts] = useState<ProductOption[]>([])
@@ -125,6 +207,23 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
   const selectClassName =
     'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none'
 
+  const inputClassName =
+    'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none'
+
+  const textareaClassName =
+    'flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none resize-y'
+
+  // Populate editable fields from order
+  function populateEditFields(o: OrderDetail) {
+    setEditStatus(o.status)
+    setEditPaymentMethod(o.payment_method ?? '')
+    setEditInstallments(o.installments ?? 1)
+    setEditCarrierName(o.carrier_name ?? '')
+    setEditShippingTracking(o.shipping_tracking ?? '')
+    setEditNotes(o.notes ?? '')
+    setEditInternalNotes(o.internal_notes ?? '')
+  }
+
   // Fetch order detail
   useEffect(() => {
     setLoading(true)
@@ -135,6 +234,10 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
         const orders = Array.isArray(data) ? data : [data]
         const found = orders.find((o: OrderDetail) => o.id === id) ?? orders[0]
         setOrder(found || null)
+
+        if (found) {
+          populateEditFields(found)
+        }
 
         // Initialize writeoff rows from order items
         if (found?.items?.length) {
@@ -191,6 +294,7 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
       .then((res) => res.json())
       .then((json) => setExistingWriteoffs(json.data ?? []))
       .catch(console.error)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   // Set default warehouse
@@ -217,6 +321,68 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
   function getOtherCompanyId(currentCompanyId: string): string {
     const other = companies.find((c) => c.id !== currentCompanyId)
     return other?.id ?? ''
+  }
+
+  // Save order changes
+  async function handleSave() {
+    if (!order) return
+    setSaving(true)
+    setSaveSuccess(null)
+    setSaveError(null)
+
+    try {
+      const res = await fetch(`/api/sales-orders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: editStatus,
+          payment_method: editPaymentMethod || null,
+          installments: editInstallments,
+          carrier_name: editCarrierName || null,
+          shipping_tracking: editShippingTracking || null,
+          notes: editNotes || null,
+          internal_notes: editInternalNotes || null,
+        }),
+      })
+
+      if (res.ok) {
+        const json = await res.json()
+        setOrder(json.data)
+        populateEditFields(json.data)
+        setSaveSuccess('Pedido atualizado com sucesso!')
+        setTimeout(() => setSaveSuccess(null), 3000)
+      } else {
+        const json = await res.json()
+        setSaveError(json.error || 'Erro ao salvar pedido.')
+      }
+    } catch {
+      setSaveError('Erro de conexao. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Delete order
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/sales-orders/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        router.push('/pedidos')
+      } else {
+        const json = await res.json()
+        setSaveError(json.error || 'Erro ao excluir pedido.')
+        setShowDeleteConfirm(false)
+      }
+    } catch {
+      setSaveError('Erro de conexao. Tente novamente.')
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function handleSubmitWriteoff() {
@@ -312,20 +478,82 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
   }
 
   const orderCompanyName = order.company?.trade_name || order.company?.name || 'N/A'
+  const contact = order.contact
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={`Pedido #${order.order_number}`}
         actions={
-          <Link href="/pedidos">
-            <Button variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Voltar
+          <div className="flex items-center gap-2">
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Excluir
             </Button>
-          </Link>
+            <Link href="/pedidos">
+              <Button variant="outline">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar
+              </Button>
+            </Link>
+          </div>
         }
       />
+
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-red-800">
+                  Tem certeza que deseja excluir o pedido #{order.order_number}?
+                </p>
+                <p className="text-sm text-red-600 mt-1">
+                  Esta acao ira excluir o pedido e todos os seus itens. Nao pode ser desfeita.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleting}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Confirmar Exclusao
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Save success/error messages */}
+      {saveSuccess && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          {saveSuccess}
+        </div>
+      )}
+
+      {saveError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {saveError}
+        </div>
+      )}
 
       {/* Order info cards */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -361,39 +589,228 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Customer info */}
+      {contact && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Cliente
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Nome</p>
+                <p className="font-medium">{contact.name}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Documento</p>
+                <p className="font-medium">{contact.document}</p>
+              </div>
+              {contact.email && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-medium">{contact.email}</p>
+                </div>
+              )}
+              {contact.phone && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Telefone</p>
+                  <p className="font-medium">{contact.phone}</p>
+                </div>
+              )}
+              {contact.mobile && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Celular</p>
+                  <p className="font-medium">{contact.mobile}</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Shipping address */}
+      {contact && (contact.street || order.shipping_address) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Endereco de Entrega
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {order.shipping_address ? (
+              <p className="font-medium">{order.shipping_address}</p>
+            ) : contact.street ? (
+              <div className="space-y-1">
+                <p className="font-medium">
+                  {contact.street}, {contact.number}
+                  {contact.complement ? ` - ${contact.complement}` : ''}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {contact.neighborhood} - {contact.city}/{contact.state}
+                </p>
+                {contact.cep && (
+                  <p className="text-sm text-muted-foreground">CEP: {contact.cep}</p>
+                )}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Payment info */}
       <Card>
         <CardHeader>
-          <CardTitle>Dados do Pedido</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Pagamento
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-sm text-muted-foreground">Cliente</p>
-              <p className="font-medium">{order.contact?.name || 'N/A'}</p>
+              <p className="text-sm text-muted-foreground">Metodo</p>
+              <p className="font-medium">
+                {PAYMENT_METHODS.find((m) => m.value === order.payment_method)?.label ||
+                  order.payment_method ||
+                  'N/A'}
+              </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Data do Pedido</p>
-              <p className="font-medium">{formatDate(order.order_date)}</p>
+              <p className="text-sm text-muted-foreground">Parcelas</p>
+              <p className="font-medium">{order.installments ?? 1}x</p>
             </div>
-            {order.salesperson && (
+            {order.pagarme_id && (
               <div>
-                <p className="text-sm text-muted-foreground">Vendedor</p>
-                <p className="font-medium">{order.salesperson.name}</p>
+                <p className="text-sm text-muted-foreground">Pagarme ID</p>
+                <p className="font-medium text-xs break-all">{order.pagarme_id}</p>
               </div>
             )}
-            {order.payment_method && (
-              <div>
-                <p className="text-sm text-muted-foreground">Pagamento</p>
-                <p className="font-medium">{order.payment_method}</p>
-              </div>
-            )}
+            <div>
+              <p className="text-sm text-muted-foreground">Subtotal / Desconto / Frete</p>
+              <p className="font-medium text-sm">
+                {formatBRL(order.subtotal)} / -{formatBRL(order.discount_value)} / +{formatBRL(order.shipping_cost)}
+              </p>
+            </div>
           </div>
-          {order.notes && (
-            <div className="mt-4">
-              <p className="text-sm text-muted-foreground">Observacoes</p>
-              <p className="text-sm mt-1">{order.notes}</p>
+        </CardContent>
+      </Card>
+
+      {/* Editable fields */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Editar Pedido</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* Status */}
+            <div className="space-y-1">
+              <Label className="text-sm">Status</Label>
+              <Select value={editStatus} onValueChange={(v) => setEditStatus(v as ErpOrderStatus)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {ORDER_STATUS_LABELS[s]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
+
+            {/* Payment method */}
+            <div className="space-y-1">
+              <Label className="text-sm">Metodo de Pagamento</Label>
+              <Select value={editPaymentMethod || '_none'} onValueChange={(v) => setEditPaymentMethod(v === '_none' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Nenhum</SelectItem>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Installments */}
+            <div className="space-y-1">
+              <Label className="text-sm">Parcelas</Label>
+              <input
+                type="number"
+                min="1"
+                max="24"
+                value={editInstallments}
+                onChange={(e) => setEditInstallments(Number(e.target.value))}
+                className={inputClassName}
+              />
+            </div>
+
+            {/* Carrier name */}
+            <div className="space-y-1">
+              <Label className="text-sm">Transportadora</Label>
+              <input
+                type="text"
+                value={editCarrierName}
+                onChange={(e) => setEditCarrierName(e.target.value)}
+                placeholder="Nome da transportadora"
+                className={inputClassName}
+              />
+            </div>
+
+            {/* Shipping tracking */}
+            <div className="space-y-1">
+              <Label className="text-sm">Codigo de Rastreio</Label>
+              <input
+                type="text"
+                value={editShippingTracking}
+                onChange={(e) => setEditShippingTracking(e.target.value)}
+                placeholder="Codigo de rastreio"
+                className={inputClassName}
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-1">
+            <Label className="text-sm">Observacoes</Label>
+            <textarea
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              placeholder="Observacoes do pedido..."
+              className={textareaClassName}
+            />
+          </div>
+
+          {/* Internal notes */}
+          <div className="space-y-1">
+            <Label className="text-sm">Observacoes Internas</Label>
+            <textarea
+              value={editInternalNotes}
+              onChange={(e) => setEditInternalNotes(e.target.value)}
+              placeholder="Observacoes internas (nao visiveis ao cliente)..."
+              className={textareaClassName}
+            />
+          </div>
+
+          {/* Save button */}
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Salvar Alteracoes
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
