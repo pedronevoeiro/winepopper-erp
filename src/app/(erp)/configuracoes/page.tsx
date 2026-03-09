@@ -51,6 +51,7 @@ import {
   Loader2,
   Banknote,
   Trash2,
+  Pencil,
   ClipboardList,
   HardHat,
   UserCheck,
@@ -324,6 +325,26 @@ export default function ConfiguracoesPage() {
   const [methodForm, setMethodForm] = useState<MethodFormData>(emptyMethodForm)
   const [submittingMethod, setSubmittingMethod] = useState(false)
   const [methodError, setMethodError] = useState('')
+
+  // Edit account dialog state
+  const [editAccountDialogOpen, setEditAccountDialogOpen] = useState(false)
+  const [editAccountForm, setEditAccountForm] = useState<AccountFormData>(emptyAccountForm)
+  const [editAccountId, setEditAccountId] = useState<string | null>(null)
+  const [submittingEditAccount, setSubmittingEditAccount] = useState(false)
+  const [editAccountError, setEditAccountError] = useState('')
+
+  // Delete account dialog state
+  const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const [deleteAccountId, setDeleteAccountId] = useState<string | null>(null)
+  const [deleteAccountName, setDeleteAccountName] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
+
+  // Edit method dialog state
+  const [editMethodDialogOpen, setEditMethodDialogOpen] = useState(false)
+  const [editMethodForm, setEditMethodForm] = useState<MethodFormData>(emptyMethodForm)
+  const [editMethodId, setEditMethodId] = useState<string | null>(null)
+  const [submittingEditMethod, setSubmittingEditMethod] = useState(false)
+  const [editMethodError, setEditMethodError] = useState('')
 
   // Workers state
   const [workers, setWorkers] = useState<ErpProductionWorker[]>([])
@@ -696,6 +717,148 @@ export default function ConfiguracoesPage() {
       }
     } catch {
       console.error('Erro ao alterar status da conta')
+    }
+  }
+
+  // ------- Edit account handlers -------
+  function openEditAccountDialog(account: PaymentAccountWithMethods) {
+    setEditAccountId(account.id)
+    setEditAccountForm({
+      name: account.name,
+      provider: account.provider,
+      notes: account.notes ?? '',
+    })
+    setEditAccountError('')
+    setEditAccountDialogOpen(true)
+  }
+
+  async function handleEditAccountSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setEditAccountError('')
+
+    if (!editAccountForm.name.trim()) {
+      setEditAccountError('Nome e obrigatorio.')
+      return
+    }
+
+    setSubmittingEditAccount(true)
+    try {
+      const res = await fetch('/api/payment-accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editAccountId,
+          name: editAccountForm.name.trim(),
+          provider: editAccountForm.provider.trim(),
+          notes: editAccountForm.notes.trim() || null,
+        }),
+      })
+
+      if (!res.ok) {
+        const json = await res.json()
+        setEditAccountError(json.error ?? 'Erro ao editar conta.')
+        return
+      }
+
+      setEditAccountDialogOpen(false)
+      await fetchAccounts()
+    } catch {
+      setEditAccountError('Erro de rede ao editar conta.')
+    } finally {
+      setSubmittingEditAccount(false)
+    }
+  }
+
+  // ------- Delete account handlers -------
+  function openDeleteAccountDialog(account: PaymentAccountWithMethods) {
+    setDeleteAccountId(account.id)
+    setDeleteAccountName(account.name)
+    setDeleteAccountDialogOpen(true)
+  }
+
+  async function handleDeleteAccount() {
+    if (!deleteAccountId) return
+    setDeletingAccount(true)
+    try {
+      const res = await fetch(`/api/payment-accounts?id=${deleteAccountId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        setDeleteAccountDialogOpen(false)
+        await fetchAccounts()
+      }
+    } catch {
+      console.error('Erro ao excluir conta')
+    } finally {
+      setDeletingAccount(false)
+    }
+  }
+
+  // ------- Delete method handler -------
+  async function handleDeleteMethod(methodId: string) {
+    try {
+      const res = await fetch(`/api/payment-accounts/methods?id=${methodId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        await fetchAccounts()
+      }
+    } catch {
+      console.error('Erro ao excluir metodo')
+    }
+  }
+
+  // ------- Edit method handlers -------
+  function openEditMethodDialog(method: PaymentAccountMethod) {
+    setEditMethodId(method.id)
+    setEditMethodForm({
+      payment_method: method.payment_method,
+      tax_percentage: String(method.tax_percentage),
+      tax_fixed: String(method.tax_fixed),
+      installment_min: String(method.installment_min),
+      installment_max: String(method.installment_max),
+    })
+    setEditMethodError('')
+    setEditMethodDialogOpen(true)
+  }
+
+  async function handleEditMethodSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setEditMethodError('')
+
+    if (!editMethodId) return
+
+    const taxPercentage = parseFloat(editMethodForm.tax_percentage) || 0
+    const taxFixed = parseFloat(editMethodForm.tax_fixed) || 0
+    const instMin = parseInt(editMethodForm.installment_min) || 1
+    const instMax = parseInt(editMethodForm.installment_max) || 1
+
+    setSubmittingEditMethod(true)
+    try {
+      const res = await fetch('/api/payment-accounts/methods', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editMethodId,
+          tax_percentage: taxPercentage,
+          tax_fixed: taxFixed,
+          installment_min: instMin,
+          installment_max: instMax,
+        }),
+      })
+
+      if (!res.ok) {
+        const json = await res.json()
+        setEditMethodError(json.error ?? 'Erro ao editar metodo.')
+        return
+      }
+
+      setEditMethodDialogOpen(false)
+      await fetchAccounts()
+    } catch {
+      setEditMethodError('Erro de rede ao editar metodo.')
+    } finally {
+      setSubmittingEditMethod(false)
     }
   }
 
@@ -1454,6 +1617,24 @@ export default function ConfiguracoesPage() {
                             </Badge>
                           )}
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Editar conta"
+                          onClick={() => openEditAccountDialog(account)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          title="Excluir conta"
+                          onClick={() => openDeleteAccountDialog(account)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
                   </CardHeader>
@@ -1467,6 +1648,7 @@ export default function ConfiguracoesPage() {
                             <TableHead className="text-right">Taxa %</TableHead>
                             <TableHead className="text-right">Taxa Fixa</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Acoes</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1510,6 +1692,28 @@ export default function ConfiguracoesPage() {
                                       Inativo
                                     </Badge>
                                   )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      title="Editar metodo"
+                                      onClick={() => openEditMethodDialog(method)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                      title="Excluir metodo"
+                                      onClick={() => handleDeleteMethod(method.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
                                 </TableCell>
                               </TableRow>
                             )
@@ -2018,6 +2222,211 @@ export default function ConfiguracoesPage() {
               <Button type="submit" disabled={submittingMethod}>
                 {submittingMethod && <Loader2 className="h-4 w-4 animate-spin" />}
                 Adicionar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* =============================================================== */}
+      {/* Dialog: Editar Conta de Recebimento                              */}
+      {/* =============================================================== */}
+      <Dialog open={editAccountDialogOpen} onOpenChange={setEditAccountDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar Conta de Recebimento</DialogTitle>
+            <DialogDescription>
+              Altere os dados da conta.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleEditAccountSubmit}>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-account-name">Nome *</Label>
+                <Input
+                  id="edit-account-name"
+                  value={editAccountForm.name}
+                  onChange={(e) => setEditAccountForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Ex: Pagar.me Principal"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-account-provider">Provedor</Label>
+                <Input
+                  id="edit-account-provider"
+                  value={editAccountForm.provider}
+                  onChange={(e) => setEditAccountForm((prev) => ({ ...prev, provider: e.target.value }))}
+                  placeholder="Ex: pagarme, pagseguro, rede"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-account-notes">Observacoes</Label>
+                <Textarea
+                  id="edit-account-notes"
+                  value={editAccountForm.notes}
+                  onChange={(e) => setEditAccountForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Informacoes adicionais sobre esta conta"
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            {editAccountError && (
+              <p className="mt-2 text-sm text-destructive">{editAccountError}</p>
+            )}
+
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditAccountDialogOpen(false)}
+                disabled={submittingEditAccount}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={submittingEditAccount}>
+                {submittingEditAccount && <Loader2 className="h-4 w-4 animate-spin" />}
+                Salvar Alteracoes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* =============================================================== */}
+      {/* Dialog: Confirmar Exclusao de Conta                              */}
+      {/* =============================================================== */}
+      <Dialog open={deleteAccountDialogOpen} onOpenChange={setDeleteAccountDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir Conta de Recebimento</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir a conta &quot;{deleteAccountName}&quot;? Todos os metodos de pagamento associados tambem serao removidos. Esta acao nao pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteAccountDialogOpen(false)}
+              disabled={deletingAccount}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount}
+            >
+              {deletingAccount && <Loader2 className="h-4 w-4 animate-spin" />}
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* =============================================================== */}
+      {/* Dialog: Editar Metodo de Pagamento                               */}
+      {/* =============================================================== */}
+      <Dialog open={editMethodDialogOpen} onOpenChange={setEditMethodDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Metodo de Pagamento</DialogTitle>
+            <DialogDescription>
+              Altere as taxas e configuracoes do metodo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleEditMethodSubmit}>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Forma de Pagamento</Label>
+                <Input
+                  value={PAYMENT_METHOD_LABELS[editMethodForm.payment_method] ?? editMethodForm.payment_method}
+                  disabled
+                />
+              </div>
+
+              {/* Installment range — only for credit_card */}
+              {editMethodForm.payment_method === 'credit_card' && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-method-inst-min">Parcela Min</Label>
+                    <Input
+                      id="edit-method-inst-min"
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={editMethodForm.installment_min}
+                      onChange={(e) => setEditMethodForm((prev) => ({ ...prev, installment_min: e.target.value }))}
+                      placeholder="1"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-method-inst-max">Parcela Max</Label>
+                    <Input
+                      id="edit-method-inst-max"
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={editMethodForm.installment_max}
+                      onChange={(e) => setEditMethodForm((prev) => ({ ...prev, installment_max: e.target.value }))}
+                      placeholder="1"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-method-tax-pct">Taxa %</Label>
+                  <Input
+                    id="edit-method-tax-pct"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editMethodForm.tax_percentage}
+                    onChange={(e) => setEditMethodForm((prev) => ({ ...prev, tax_percentage: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-method-tax-fixed">Taxa Fixa R$</Label>
+                  <Input
+                    id="edit-method-tax-fixed"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editMethodForm.tax_fixed}
+                    onChange={(e) => setEditMethodForm((prev) => ({ ...prev, tax_fixed: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {editMethodError && (
+              <p className="mt-2 text-sm text-destructive">{editMethodError}</p>
+            )}
+
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditMethodDialogOpen(false)}
+                disabled={submittingEditMethod}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={submittingEditMethod}>
+                {submittingEditMethod && <Loader2 className="h-4 w-4 animate-spin" />}
+                Salvar Alteracoes
               </Button>
             </DialogFooter>
           </form>

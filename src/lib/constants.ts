@@ -122,6 +122,14 @@ export const INVOICE_STATUS_LABELS: Record<ErpInvoiceStatus, string> = {
   denied: 'Rejeitada',
 }
 
+export const INVOICE_STATUS_COLORS: Record<ErpInvoiceStatus, string> = {
+  draft: 'bg-gray-100 text-gray-700',
+  processing: 'bg-blue-100 text-blue-800',
+  authorized: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800',
+  denied: 'bg-orange-100 text-orange-800',
+}
+
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   pix: 'PIX',
   boleto: 'Boleto',

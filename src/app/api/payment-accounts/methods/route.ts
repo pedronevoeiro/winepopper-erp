@@ -83,6 +83,70 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PATCH /api/payment-accounts/methods
+// Update a method's tax/installment settings.
+// Body: { id, tax_percentage?, tax_fixed?, installment_min?, installment_max?, active? }
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+
+    if (!body.id) {
+      return NextResponse.json(
+        { error: 'Campo obrigatório: id' },
+        { status: 400 }
+      )
+    }
+
+    const updatePayload: Record<string, unknown> = {}
+
+    if (body.tax_percentage !== undefined) {
+      updatePayload.tax_percentage = Number(body.tax_percentage)
+    }
+    if (body.tax_fixed !== undefined) {
+      updatePayload.tax_fixed = Number(body.tax_fixed)
+    }
+    if (body.installment_min !== undefined) {
+      updatePayload.installment_min = Number(body.installment_min)
+    }
+    if (body.installment_max !== undefined) {
+      updatePayload.installment_max = Number(body.installment_max)
+    }
+    if (typeof body.active === 'boolean') {
+      updatePayload.active = body.active
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return NextResponse.json(
+        { error: 'Nenhum campo para atualizar.' },
+        { status: 400 }
+      )
+    }
+
+    const { data: updated, error } = await db()
+      .from('erp_payment_account_methods')
+      .update(updatePayload)
+      .eq('id', body.id)
+      .select()
+      .single()
+
+    if (error || !updated) {
+      console.error('PATCH /api/payment-accounts/methods error:', error)
+      return NextResponse.json(
+        { error: `Método não encontrado: ${body.id}` },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({ data: updated })
+  } catch (err) {
+    console.error('PATCH /api/payment-accounts/methods unexpected error:', err)
+    return NextResponse.json(
+      { error: 'Corpo da requisição inválido.' },
+      { status: 400 }
+    )
+  }
+}
+
 // DELETE /api/payment-accounts/methods?id=xxx
 // Remove a method by ID.
 export async function DELETE(request: NextRequest) {

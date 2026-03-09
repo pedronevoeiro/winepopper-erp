@@ -164,8 +164,8 @@ export async function POST(request: NextRequest) {
 }
 
 // PATCH /api/payment-accounts
-// Toggle active status of a payment account.
-// Body: { id, active }
+// Update a payment account.
+// Body: { id, active?, name?, provider?, notes? }
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
@@ -184,12 +184,21 @@ export async function PATCH(request: NextRequest) {
     if (typeof body.active === 'boolean') {
       updatePayload.active = body.active
     }
+    if (typeof body.name === 'string') {
+      updatePayload.name = body.name
+    }
+    if (typeof body.provider === 'string') {
+      updatePayload.provider = body.provider
+    }
+    if (body.notes !== undefined) {
+      updatePayload.notes = body.notes
+    }
 
     const { data: updated, error } = await db()
       .from('erp_payment_accounts')
       .update(updatePayload)
       .eq('id', body.id)
-      .select('id, active')
+      .select('id, name, provider, active, notes')
       .single()
 
     if (error || !updated) {
@@ -200,12 +209,66 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ data: { id: updated.id, active: updated.active } })
+    return NextResponse.json({ data: updated })
   } catch (err) {
     console.error('PATCH /api/payment-accounts unexpected error:', err)
     return NextResponse.json(
       { error: 'Corpo da requisição inválido.' },
       { status: 400 }
     )
+  }
+}
+
+// DELETE /api/payment-accounts?id=xxx
+// Delete a payment account and all its methods.
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = request.nextUrl
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Query param obrigatório: id' },
+        { status: 400 }
+      )
+    }
+
+    const supabase = db()
+
+    // Check existence
+    const { data: existing, error: checkErr } = await supabase
+      .from('erp_payment_accounts')
+      .select('id')
+      .eq('id', id)
+      .single()
+
+    if (checkErr || !existing) {
+      return NextResponse.json(
+        { error: `Conta não encontrada: ${id}` },
+        { status: 404 }
+      )
+    }
+
+    // Delete all methods first
+    await supabase
+      .from('erp_payment_account_methods')
+      .delete()
+      .eq('account_id', id)
+
+    // Delete the account
+    const { error } = await supabase
+      .from('erp_payment_accounts')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('DELETE /api/payment-accounts error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('DELETE /api/payment-accounts unexpected error:', err)
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 })
   }
 }

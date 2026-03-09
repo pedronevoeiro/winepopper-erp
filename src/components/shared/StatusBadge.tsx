@@ -11,9 +11,11 @@ import {
   COMMISSION_STATUS_COLORS,
   PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_ORDER_STATUS_COLORS,
+  INVOICE_STATUS_LABELS,
+  INVOICE_STATUS_COLORS,
 } from '@/lib/constants'
 
-type StatusType = 'order' | 'financial' | 'production' | 'commission' | 'purchase_order'
+type StatusType = 'order' | 'financial' | 'production' | 'commission' | 'purchase_order' | 'invoice'
 
 interface StatusBadgeProps {
   status: string
@@ -27,6 +29,7 @@ const labelsMap: Record<StatusType, Record<string, string>> = {
   production: PRODUCTION_STATUS_LABELS,
   commission: COMMISSION_STATUS_LABELS,
   purchase_order: PURCHASE_ORDER_STATUS_LABELS,
+  invoice: INVOICE_STATUS_LABELS,
 }
 
 const colorsMap: Record<StatusType, Record<string, string>> = {
@@ -35,6 +38,7 @@ const colorsMap: Record<StatusType, Record<string, string>> = {
   production: PRODUCTION_STATUS_COLORS,
   commission: COMMISSION_STATUS_COLORS,
   purchase_order: PURCHASE_ORDER_STATUS_COLORS,
+  invoice: INVOICE_STATUS_COLORS,
 }
 
 export function StatusBadge({ status, type, className }: StatusBadgeProps) {

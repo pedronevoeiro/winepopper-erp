@@ -288,6 +288,21 @@ export interface ErpInvoice {
   updated_at: string
 }
 
+export interface ErpInvoiceItem {
+  id: string
+  invoice_id: string
+  product_id: string
+  variation_id: string | null
+  description: string
+  sku: string | null
+  quantity: number
+  unit_price: number
+  discount_pct: number
+  total: number
+  ncm: string | null
+  cfop: string | null
+}
+
 export interface ErpProductionOrder {
   id: string
   order_number: number
@@ -447,6 +462,7 @@ export interface Database {
       erp_financial_entries: { Row: ErpFinancialEntry; Insert: Partial<ErpFinancialEntry> & Pick<ErpFinancialEntry, 'type' | 'description' | 'amount' | 'due_date'>; Update: Partial<ErpFinancialEntry> }
       erp_financial_installments: { Row: ErpFinancialInstallment; Insert: Partial<ErpFinancialInstallment> & Pick<ErpFinancialInstallment, 'entry_id' | 'installment_num' | 'amount' | 'due_date'>; Update: Partial<ErpFinancialInstallment> }
       erp_invoices: { Row: ErpInvoice; Insert: Partial<ErpInvoice>; Update: Partial<ErpInvoice> }
+      erp_invoice_items: { Row: ErpInvoiceItem; Insert: Partial<ErpInvoiceItem> & Pick<ErpInvoiceItem, 'invoice_id' | 'product_id' | 'description' | 'quantity' | 'unit_price' | 'total'>; Update: Partial<ErpInvoiceItem> }
       erp_production_orders: { Row: ErpProductionOrder; Insert: Partial<ErpProductionOrder> & Pick<ErpProductionOrder, 'product_id' | 'quantity' | 'warehouse_id'>; Update: Partial<ErpProductionOrder> }
       erp_production_components: { Row: ErpProductionComponent; Insert: Partial<ErpProductionComponent> & Pick<ErpProductionComponent, 'production_id' | 'component_id' | 'required_qty'>; Update: Partial<ErpProductionComponent> }
       erp_purchase_entries: { Row: ErpPurchaseEntry; Insert: Partial<ErpPurchaseEntry> & Pick<ErpPurchaseEntry, 'supplier_id' | 'warehouse_id'>; Update: Partial<ErpPurchaseEntry> }
