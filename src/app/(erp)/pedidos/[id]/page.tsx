@@ -63,7 +63,7 @@ interface OrderDetail {
   installments: number | null
   carrier_name: string | null
   shipping_tracking: string | null
-  shipping_address: string | null
+  shipping_address: string | Record<string, string> | null
   shipping_method: string | null
   pagarme_id: string | null
   notes: string | null
@@ -683,7 +683,22 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
           </CardHeader>
           <CardContent>
             {order.shipping_address ? (
-              <p className="font-medium">{order.shipping_address}</p>
+              typeof order.shipping_address === 'object' && order.shipping_address !== null ? (
+                <div className="space-y-1">
+                  <p className="font-medium">
+                    {(order.shipping_address as Record<string, string>).street}, {(order.shipping_address as Record<string, string>).number}
+                    {(order.shipping_address as Record<string, string>).complement ? ` - ${(order.shipping_address as Record<string, string>).complement}` : ''}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {(order.shipping_address as Record<string, string>).neighborhood} - {(order.shipping_address as Record<string, string>).city}/{(order.shipping_address as Record<string, string>).state}
+                  </p>
+                  {(order.shipping_address as Record<string, string>).cep && (
+                    <p className="text-sm text-muted-foreground">CEP: {(order.shipping_address as Record<string, string>).cep}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="font-medium">{String(order.shipping_address)}</p>
+              )
             ) : contact.street ? (
               <div className="space-y-1">
                 <p className="font-medium">
