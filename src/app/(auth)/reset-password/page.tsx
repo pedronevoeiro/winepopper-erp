@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/browser'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Wine, CheckCircle2 } from 'lucide-react'
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [password, setPassword] = useState('')
@@ -20,7 +20,6 @@ export default function ResetPasswordPage() {
   const [sessionReady, setSessionReady] = useState(false)
 
   useEffect(() => {
-    // Handle hash fragment tokens (Supabase implicit grant)
     const hash = window.location.hash
     if (hash) {
       const params = new URLSearchParams(hash.substring(1))
@@ -44,7 +43,6 @@ export default function ResetPasswordPage() {
       }
     }
 
-    // Handle code-based flow
     const code = searchParams.get('code')
     if (code) {
       const supabase = createClient()
@@ -58,7 +56,6 @@ export default function ResetPasswordPage() {
       return
     }
 
-    // No token or code found
     setError('Link de recuperacao invalido. Solicite um novo.')
   }, [searchParams])
 
@@ -96,68 +93,82 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary">
-            <Wine className="h-6 w-6 text-primary-foreground" />
+    <Card className="w-full max-w-md">
+      <CardHeader className="text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary">
+          <Wine className="h-6 w-6 text-primary-foreground" />
+        </div>
+        <CardTitle className="text-2xl">Redefinir Senha</CardTitle>
+        <CardDescription>
+          {success ? 'Senha atualizada com sucesso!' : 'Digite sua nova senha'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {success ? (
+          <div className="text-center space-y-4">
+            <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
+            <p className="text-sm text-muted-foreground">
+              Redirecionando para o login...
+            </p>
           </div>
-          <CardTitle className="text-2xl">Redefinir Senha</CardTitle>
-          <CardDescription>
-            {success ? 'Senha atualizada com sucesso!' : 'Digite sua nova senha'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {success ? (
-            <div className="text-center space-y-4">
-              <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
-              <p className="text-sm text-muted-foreground">
-                Redirecionando para o login...
-              </p>
+        ) : sessionReady ? (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="password">Nova senha</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Minimo 6 caracteres"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </div>
-          ) : sessionReady ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password">Nova senha</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Minimo 6 caracteres"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirmar senha</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Repita a senha"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
-              </div>
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Salvando...' : 'Salvar nova senha'}
-              </Button>
-            </form>
-          ) : error ? (
-            <div className="text-center space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmar senha</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Repita a senha"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+            {error && (
               <p className="text-sm text-destructive">{error}</p>
-              <Button variant="outline" onClick={() => router.push('/login')}>
-                Voltar ao login
-              </Button>
-            </div>
-          ) : (
-            <p className="text-center text-sm text-muted-foreground">Verificando link...</p>
-          )}
-        </CardContent>
-      </Card>
+            )}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Salvando...' : 'Salvar nova senha'}
+            </Button>
+          </form>
+        ) : error ? (
+          <div className="text-center space-y-4">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button variant="outline" onClick={() => router.push('/login')}>
+              Voltar ao login
+            </Button>
+          </div>
+        ) : (
+          <p className="text-center text-sm text-muted-foreground">Verificando link...</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-muted/30">
+      <Suspense fallback={
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-center text-sm text-muted-foreground">Carregando...</p>
+          </CardContent>
+        </Card>
+      }>
+        <ResetPasswordForm />
+      </Suspense>
     </div>
   )
 }
