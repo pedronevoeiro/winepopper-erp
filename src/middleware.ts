@@ -1,8 +1,7 @@
 import { auth } from '@/auth'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
 
-export default auth((req: NextRequest & { auth: { user?: { id: string } } | null }) => {
+export default auth((req) => {
   const isLoggedIn = !!req.auth
   const path = req.nextUrl.pathname
   const isAuthPage = path.startsWith('/login')
