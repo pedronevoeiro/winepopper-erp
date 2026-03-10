@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,16 @@ import { Wine } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
+
+  useEffect(() => {
+    // Supabase recovery redirects to site URL with hash fragment
+    // e.g. /login#access_token=xxx&type=recovery
+    const hash = window.location.hash
+    if (hash && hash.includes('type=recovery')) {
+      router.replace(`/reset-password${hash}`)
+    }
+  }, [router])
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
