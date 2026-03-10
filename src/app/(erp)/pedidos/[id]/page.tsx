@@ -107,6 +107,15 @@ interface CompanyOption {
   name: string
   trade_name: string | null
   document: string
+  is_mirror_stock?: boolean
+}
+
+interface MirrorMapping {
+  source_product_id: string
+  target_company_id: string
+  target_product_id: string
+  target_variation_id: string | null
+  quantity_ratio: number
 }
 
 interface WarehouseOption {
@@ -203,6 +212,7 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
   const [submittingWriteoff, setSubmittingWriteoff] = useState(false)
   const [writeoffSuccess, setWriteoffSuccess] = useState<string | null>(null)
   const [writeoffError, setWriteoffError] = useState<string | null>(null)
+  const [mirrorMappings, setMirrorMappings] = useState<MirrorMapping[]>([])
 
   const selectClassName =
     'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none'
@@ -262,10 +272,16 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
       .catch(console.error)
       .finally(() => setLoading(false))
 
-    // Fetch companies
+    // Fetch companies (includes is_mirror_stock)
     fetch('/api/companies')
       .then((res) => res.json())
       .then((json) => setCompanies(json.data ?? []))
+      .catch(console.error)
+
+    // Fetch mirror mappings for auto-fill
+    fetch('/api/product-mirrors')
+      .then((res) => res.json())
+      .then((json) => setMirrorMappings(json.data ?? []))
       .catch(console.error)
 
     // Fetch warehouses
@@ -297,19 +313,45 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // Set default warehouse
+  // Set default warehouse and auto-fill mirror mappings
   useEffect(() => {
-    if (warehouses.length > 0 && writeoffRows.length > 0) {
+    if (warehouses.length > 0 && writeoffRows.length > 0 && companies.length > 0) {
       const defaultWh = warehouses[0].id
+      const orderCompany = companies.find((c) => c.id === order?.company_id)
+      const isMirrorCompany = orderCompany?.is_mirror_stock === true
+      const realCompany = companies.find((c) => !c.is_mirror_stock)
+
       setWriteoffRows((prev) =>
-        prev.map((row) => ({
-          ...row,
-          warehouse_id: row.warehouse_id || defaultWh,
-          mirror_warehouse_id: row.mirror_warehouse_id || defaultWh,
-        }))
+        prev.map((row) => {
+          const updates: Partial<WriteoffRow> = {
+            warehouse_id: row.warehouse_id || defaultWh,
+            mirror_warehouse_id: row.mirror_warehouse_id || defaultWh,
+          }
+
+          // Auto-enable mirror if order company has fictional stock
+          if (isMirrorCompany && realCompany && !row.enable_mirror && mirrorMappings.length > 0) {
+            const mapping = mirrorMappings.find(
+              (m) => m.source_product_id === row.product_id
+            )
+            if (mapping) {
+              updates.enable_mirror = true
+              updates.mirror_company_id = mapping.target_company_id
+              updates.mirror_product_id = mapping.target_product_id
+              updates.mirror_quantity = row.quantity * mapping.quantity_ratio
+              updates.mirror_warehouse_id = row.mirror_warehouse_id || defaultWh
+            } else if (isMirrorCompany) {
+              // No mapping found but company is fictional — enable mirror anyway so user fills it
+              updates.enable_mirror = true
+              updates.mirror_company_id = realCompany.id
+            }
+          }
+
+          return { ...row, ...updates }
+        })
       )
     }
-  }, [warehouses, writeoffRows.length])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouses.length, writeoffRows.length, companies.length, mirrorMappings.length])
 
   function updateWriteoffRow(index: number, updates: Partial<WriteoffRow>) {
     setWriteoffRows((prev) =>
@@ -909,6 +951,26 @@ export default function PedidoDetalhePage({ params }: { params: Promise<{ id: st
               {writeoffError}
             </div>
           )}
+
+          {/* Alert for missing mirror mappings */}
+          {(() => {
+            const orderCompany = companies.find((c) => c.id === order?.company_id)
+            if (!orderCompany?.is_mirror_stock) return null
+            const unmapped = writeoffRows.filter(
+              (row) => row.enable_mirror && !row.mirror_product_id
+            )
+            if (unmapped.length === 0) return null
+            return (
+              <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                <strong>Atencao:</strong> Esta empresa possui estoque ficticio.{' '}
+                {unmapped.length} item(ns) nao possui(em) produto espelho configurado.
+                Preencha manualmente ou configure em{' '}
+                <a href="/configuracoes/espelhos" className="underline font-medium">
+                  Configuracoes &gt; Espelhos
+                </a>.
+              </div>
+            )
+          })()}
 
           {writeoffRows.map((row, index) => (
             <div key={row.order_item_id} className="rounded-md border p-4 space-y-4">

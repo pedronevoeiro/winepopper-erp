@@ -33,6 +33,7 @@ export interface ErpCompany {
   state: string | null
   ibge_code: string | null
   logo_url: string | null
+  is_mirror_stock: boolean
   active: boolean
   created_at: string
   updated_at: string
@@ -74,6 +75,7 @@ export interface ErpContact {
   notes: string | null
   active: boolean
   salesperson_id: string | null
+  bling_id: number | null
   created_at: string
   updated_at: string
 }
@@ -116,6 +118,7 @@ export interface ErpProduct {
   manage_stock: boolean
   is_kit: boolean
   store_product_id: string | null
+  bling_id: number | null
   created_at: string
   updated_at: string
 }
@@ -203,6 +206,7 @@ export interface ErpSalesOrder {
   shipping_tracking: string | null
   carrier_name: string | null
   company_id: string | null
+  bling_id: number | null
   store_order_id: string | null
   pagarme_id: string | null
   melhorenvio_id: string | null
@@ -245,8 +249,10 @@ export interface ErpFinancialEntry {
   account_id: string | null
   reference_type: string | null
   reference_id: string | null
+  company_id: string | null
   category: string | null
   notes: string | null
+  bling_id: number | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -273,6 +279,7 @@ export interface ErpInvoice {
   protocol: string | null
   sales_order_id: string | null
   contact_id: string | null
+  company_id: string | null
   total_products: number
   total_shipping: number
   total_discount: number
@@ -282,8 +289,23 @@ export interface ErpInvoice {
   provider_ref: string | null
   xml_url: string | null
   pdf_url: string | null
+  bling_id: number | null
   issue_date: string | null
   created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ErpProductMirror {
+  id: string
+  source_company_id: string
+  source_product_id: string
+  source_variation_id: string | null
+  target_company_id: string
+  target_product_id: string
+  target_variation_id: string | null
+  quantity_ratio: number
+  active: boolean
   created_at: string
   updated_at: string
 }
@@ -489,6 +511,7 @@ export interface Database {
       erp_purchase_orders: { Row: ErpPurchaseOrder; Insert: Partial<ErpPurchaseOrder> & Pick<ErpPurchaseOrder, 'supplier_id'>; Update: Partial<ErpPurchaseOrder> }
       erp_purchase_order_items: { Row: ErpPurchaseOrderItem; Insert: Partial<ErpPurchaseOrderItem> & Pick<ErpPurchaseOrderItem, 'purchase_order_id' | 'product_id' | 'quantity' | 'unit_cost_estimated' | 'total_estimated'>; Update: Partial<ErpPurchaseOrderItem> }
       erp_bling_credentials: { Row: ErpBlingCredentials; Insert: Partial<ErpBlingCredentials> & Pick<ErpBlingCredentials, 'company_id' | 'client_id' | 'client_secret'>; Update: Partial<ErpBlingCredentials> }
+      erp_product_mirrors: { Row: ErpProductMirror; Insert: Partial<ErpProductMirror> & Pick<ErpProductMirror, 'source_company_id' | 'source_product_id' | 'target_company_id' | 'target_product_id'>; Update: Partial<ErpProductMirror> }
     }
   }
 }

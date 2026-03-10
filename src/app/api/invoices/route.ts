@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
     // Calculate totals from order items
     const totalProducts = items.reduce((sum: number, item: { total: number }) => sum + item.total, 0)
 
-    // Insert invoice
+    // Insert invoice (company_id vem do pedido de venda)
     const { data: newInvoice, error: insertError } = await supabase
       .from('erp_invoices')
       .insert({
@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
         series: body.series ?? 1,
         sales_order_id: order.id,
         contact_id: order.contact_id,
+        company_id: order.company_id ?? null,
         total_products: totalProducts,
         total_shipping: order.shipping_cost ?? 0,
         total_discount: order.discount_value ?? 0,

@@ -53,6 +53,7 @@ import {
   Trash2,
   Pencil,
   ClipboardList,
+  Package,
   HardHat,
   UserCheck,
   Warehouse,
@@ -1317,6 +1318,58 @@ export default function ConfiguracoesPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Quick links for Bling tools */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
+                      <ClipboardList className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">Importar Dados do Bling</CardTitle>
+                      <CardDescription className="mt-0.5 text-xs">
+                        Importar contatos, produtos, estoque, pedidos, financeiro e NF-e
+                      </CardDescription>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <a href="/configuracoes/importacao">
+                  <Button variant="outline" size="sm" className="w-full">
+                    Abrir Importacao
+                  </Button>
+                </a>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50">
+                      <Package className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">Produtos Espelho</CardTitle>
+                      <CardDescription className="mt-0.5 text-xs">
+                        Mapear produtos ficticios para produtos reais entre empresas
+                      </CardDescription>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <a href="/configuracoes/espelhos">
+                  <Button variant="outline" size="sm" className="w-full">
+                    Configurar Espelhos
+                  </Button>
+                </a>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Other integrations (static) */}
           <div className="grid gap-4 md:grid-cols-2">
