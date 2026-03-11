@@ -18,6 +18,7 @@ import {
   ShoppingBag,
   Percent,
   Settings,
+  Palette,
 } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -26,6 +27,7 @@ import { useSidebar } from '@/components/layout/SidebarContext'
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Pedidos', href: '/pedidos', icon: ShoppingCart },
+  { name: 'Personalização', href: '/pedidos/board', icon: Palette },
   { name: 'Contatos', href: '/contatos', icon: Users },
   { name: 'Produtos', href: '/produtos', icon: Package },
   { name: 'Imobilizado', href: '/imobilizado', icon: Landmark },
@@ -46,7 +48,8 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     <>
       {/* Logo */}
       <div className="flex h-16 shrink-0 items-center gap-2 border-b px-6">
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src="/logo/simbolo-preto.png"
           alt="Winepopper"
           width={24}
@@ -60,7 +63,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            const isActive = pathname === item.href || (pathname.startsWith(item.href + '/') && !navigation.some((n) => n.href !== item.href && n.href.startsWith(item.href + '/') && (pathname === n.href || pathname.startsWith(n.href + '/'))))
             return (
               <Link
                 key={item.href}

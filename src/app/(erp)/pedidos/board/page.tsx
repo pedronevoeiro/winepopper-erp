@@ -276,6 +276,32 @@ export default function PedidosBoardPage() {
 
   // ── Toggle tag on order ──
   async function toggleTag(orderId: string, tagId: string) {
+    const tag = tags.find((t) => t.id === tagId)
+    if (!tag) return
+
+    // Check if currently assigned
+    const order = orders.find((o) => o.id === orderId)
+    if (!order) return
+    const isCurrentlyAssigned = order.tag_assignments.some((ta) => ta.tag_id === tagId)
+
+    // Optimistic update for both orders and selectedOrder
+    const updateTagAssignments = (o: BoardOrder): BoardOrder => {
+      if (o.id !== orderId) return o
+      if (isCurrentlyAssigned) {
+        return { ...o, tag_assignments: o.tag_assignments.filter((ta) => ta.tag_id !== tagId) }
+      } else {
+        const newAssignment: TagAssignment = {
+          id: `temp-${Date.now()}`,
+          tag_id: tagId,
+          tag: { id: tag.id, name: tag.name, color: tag.color },
+        }
+        return { ...o, tag_assignments: [...o.tag_assignments, newAssignment] }
+      }
+    }
+
+    setOrders((prev) => prev.map(updateTagAssignments))
+    setSelectedOrder((prev) => prev ? updateTagAssignments(prev) : prev)
+
     try {
       const res = await fetch('/api/order-tags', {
         method: 'POST',
@@ -285,20 +311,22 @@ export default function PedidosBoardPage() {
       const json = await res.json()
 
       // Log activity
-      const tag = tags.find((t) => t.id === tagId)
       await fetch('/api/order-activities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           order_id: orderId,
           action: json.action === 'added' ? 'tag_added' : 'tag_removed',
-          details: { tag: tag?.name || tagId },
+          details: { tag: tag.name },
         }),
       })
 
+      // Refresh in background to get real IDs
       fetchOrders()
     } catch {
-      console.error('Erro ao alternar tag')
+      // Revert on error
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? order : o)))
+      setSelectedOrder((prev) => prev && prev.id === orderId ? order : prev)
     }
   }
 

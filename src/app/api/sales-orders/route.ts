@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: data ?? [],
       count: data?.length ?? 0,
+    }, {
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
     })
   } catch (err) {
     console.error('GET /api/sales-orders unexpected error:', err)
