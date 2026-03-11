@@ -130,6 +130,24 @@ export const INVOICE_STATUS_COLORS: Record<ErpInvoiceStatus, string> = {
   denied: 'bg-orange-100 text-orange-800',
 }
 
+// Board status labels and colors (Kanban columns matching ClickUp workflow)
+export type BoardStatus = 'exportacoes' | 'aguardando' | 'amostras' | 'pedido_inicial' | 'personalizacao' | 'preparacao' | 'pronto' | 'despachado'
+
+export const BOARD_COLUMNS: { key: BoardStatus; label: string; color: string; dotColor: string }[] = [
+  { key: 'exportacoes', label: 'Exportações', color: 'bg-slate-100', dotColor: 'bg-slate-500' },
+  { key: 'aguardando', label: 'Aguardando', color: 'bg-red-50', dotColor: 'bg-red-500' },
+  { key: 'amostras', label: 'Amostras', color: 'bg-red-50', dotColor: 'bg-red-400' },
+  { key: 'pedido_inicial', label: 'Pedido Inicial', color: 'bg-slate-50', dotColor: 'bg-slate-700' },
+  { key: 'personalizacao', label: 'Personalização', color: 'bg-purple-50', dotColor: 'bg-purple-500' },
+  { key: 'preparacao', label: 'Preparação/Faturamento', color: 'bg-orange-50', dotColor: 'bg-orange-500' },
+  { key: 'pronto', label: 'Pronto', color: 'bg-green-50', dotColor: 'bg-green-500' },
+  { key: 'despachado', label: 'Despachado', color: 'bg-blue-50', dotColor: 'bg-blue-500' },
+]
+
+export const BOARD_STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  BOARD_COLUMNS.map((c) => [c.key, c.label])
+)
+
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   pix: 'PIX',
   boleto: 'Boleto',

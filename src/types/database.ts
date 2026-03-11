@@ -215,6 +215,8 @@ export interface ErpSalesOrder {
   notes: string | null
   attachments: string[]
   internal_notes: string | null
+  board_status: string | null
+  checklist: Array<{ text: string; checked: boolean }>
   created_by: string | null
   created_at: string
   updated_at: string
@@ -480,6 +482,30 @@ export interface ErpPaymentAccountMethod {
   active: boolean
 }
 
+export interface ErpOrderTag {
+  id: string
+  name: string
+  color: string
+  active: boolean
+  created_at: string
+}
+
+export interface ErpOrderTagAssignment {
+  id: string
+  order_id: string
+  tag_id: string
+  created_at: string
+}
+
+export interface ErpOrderActivity {
+  id: string
+  order_id: string
+  action: string
+  details: Record<string, unknown>
+  created_by: string | null
+  created_at: string
+}
+
 // Tipo genérico do banco — usado pelos Supabase clients
 export interface Database {
   public: {
@@ -512,6 +538,9 @@ export interface Database {
       erp_purchase_order_items: { Row: ErpPurchaseOrderItem; Insert: Partial<ErpPurchaseOrderItem> & Pick<ErpPurchaseOrderItem, 'purchase_order_id' | 'product_id' | 'quantity' | 'unit_cost_estimated' | 'total_estimated'>; Update: Partial<ErpPurchaseOrderItem> }
       erp_bling_credentials: { Row: ErpBlingCredentials; Insert: Partial<ErpBlingCredentials> & Pick<ErpBlingCredentials, 'company_id' | 'client_id' | 'client_secret'>; Update: Partial<ErpBlingCredentials> }
       erp_product_mirrors: { Row: ErpProductMirror; Insert: Partial<ErpProductMirror> & Pick<ErpProductMirror, 'source_company_id' | 'source_product_id' | 'target_company_id' | 'target_product_id'>; Update: Partial<ErpProductMirror> }
+      erp_order_tags: { Row: ErpOrderTag; Insert: Partial<ErpOrderTag> & Pick<ErpOrderTag, 'name'>; Update: Partial<ErpOrderTag> }
+      erp_order_tag_assignments: { Row: ErpOrderTagAssignment; Insert: Partial<ErpOrderTagAssignment> & Pick<ErpOrderTagAssignment, 'order_id' | 'tag_id'>; Update: Partial<ErpOrderTagAssignment> }
+      erp_order_activities: { Row: ErpOrderActivity; Insert: Partial<ErpOrderActivity> & Pick<ErpOrderActivity, 'order_id' | 'action'>; Update: Partial<ErpOrderActivity> }
     }
   }
 }

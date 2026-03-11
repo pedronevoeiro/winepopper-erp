@@ -30,7 +30,7 @@ import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_COLORS,
 } from '@/lib/constants'
-import { Plus, ShoppingCart } from 'lucide-react'
+import { Plus, ShoppingCart, LayoutGrid } from 'lucide-react'
 import type { ErpOrderStatus } from '@/types/database'
 
 interface OrderWithRelations {
@@ -117,12 +117,20 @@ export default function PedidosPage() {
         title="Pedidos de Venda"
         description="Gerencie seus pedidos de venda"
         actions={
-          <Link href="/pedidos/novo">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Novo Pedido
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/pedidos/board">
+              <Button variant="outline">
+                <LayoutGrid className="mr-2 h-4 w-4" />
+                Board
+              </Button>
+            </Link>
+            <Link href="/pedidos/novo">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Pedido
+              </Button>
+            </Link>
+          </div>
         }
       />
 

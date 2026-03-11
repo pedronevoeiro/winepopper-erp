@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
     let query = db()
       .from('erp_sales_orders')
-      .select('*, contact:erp_contacts(*), salesperson:erp_salespeople(*), company:erp_companies(*), items:erp_sales_order_items(*)')
+      .select('*, contact:erp_contacts(*), salesperson:erp_salespeople(*), company:erp_companies(*), items:erp_sales_order_items(*), tag_assignments:erp_order_tag_assignments(*, tag:erp_order_tags(*))')
       .order('order_date', { ascending: false })
 
     if (statusFilter) {

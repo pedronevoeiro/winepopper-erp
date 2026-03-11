@@ -73,6 +73,18 @@ export async function PATCH(
       allowedFields.shipping_method = body.shipping_method
     }
 
+    if (body.board_status !== undefined) {
+      allowedFields.board_status = body.board_status
+    }
+
+    if (body.checklist !== undefined) {
+      allowedFields.checklist = body.checklist
+    }
+
+    if (body.attachments !== undefined) {
+      allowedFields.attachments = body.attachments
+    }
+
     if (Object.keys(allowedFields).length === 0) {
       return NextResponse.json(
         { error: 'Nenhum campo valido para atualizar.' },
