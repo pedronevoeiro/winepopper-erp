@@ -24,9 +24,9 @@ import { ProductStructureBadge } from '@/components/shared/ProductStructureBadge
 import { formatBRL, formatDate } from '@/lib/constants'
 import {
   ArrowLeft, Save, Trash2, Loader2, Plus, X, AlertCircle,
-  Package, Layers, Users2, Boxes, CheckCircle, AlertTriangle,
+  Package, Layers, Users2, Boxes, CheckCircle, AlertTriangle, Link2, ArrowRight,
 } from 'lucide-react'
-import type { ErpProductType, ErpProductStructure, ErpProductVariation, ErpContact, ErpStock, ErpStockMovement } from '@/types/database'
+import type { ErpProductType, ErpProductStructure, ErpProductVariation, ErpContact, ErpStock, ErpStockMovement, ErpCompany, ErpProductMirror } from '@/types/database'
 
 // ── Types ──────────────────────────────────────────────────
 interface BomComponentEnriched {
@@ -142,6 +142,15 @@ export default function ProductDetailPage({
   const [newVarSku, setNewVarSku] = useState('')
   const [addingVar, setAddingVar] = useState(false)
 
+  // Mirror product
+  const [companies, setCompanies] = useState<ErpCompany[]>([])
+  const [mirrorMappings, setMirrorMappings] = useState<(ErpProductMirror & { source_company?: { id: string; name: string; trade_name: string | null }; target_company?: { id: string; name: string; trade_name: string | null }; source_product?: { id: string; name: string; sku: string | null }; target_product?: { id: string; name: string; sku: string | null } })[]>([])
+  const [allProducts, setAllProducts] = useState<{ id: string; name: string; sku: string | null }[]>([])
+  const [mirrorTargetProductId, setMirrorTargetProductId] = useState('')
+  const [mirrorQuantityRatio, setMirrorQuantityRatio] = useState(1)
+  const [savingMirror, setSavingMirror] = useState(false)
+  const [mirrorSearch, setMirrorSearch] = useState('')
+
   const fetchProduct = useCallback(() => {
     setLoading(true)
     fetch(`/api/products/${id}`)
@@ -187,6 +196,44 @@ export default function ProductDetailPage({
         const data = Array.isArray(json) ? json : json.data ?? []
         setSuppliers(data.map((c: ErpContact) => ({
           id: c.id, name: c.name, document: c.document, email: c.email, phone: c.phone,
+        })))
+      })
+      .catch(() => {})
+  }, [])
+
+  // Fetch companies
+  useEffect(() => {
+    fetch('/api/companies')
+      .then((r) => r.json())
+      .then((json) => setCompanies(json.data ?? []))
+      .catch(() => {})
+  }, [])
+
+  // Fetch mirror mappings for this product
+  const fetchMirrors = useCallback(() => {
+    fetch('/api/product-mirrors')
+      .then((r) => r.json())
+      .then((json) => {
+        const all = json.data ?? []
+        // Find mappings where this product is either source or target
+        const relevant = all.filter((m: ErpProductMirror) =>
+          m.source_product_id === id || m.target_product_id === id
+        )
+        setMirrorMappings(relevant)
+      })
+      .catch(() => {})
+  }, [id])
+
+  useEffect(() => { fetchMirrors() }, [fetchMirrors])
+
+  // Fetch all produto_final for mirror selection
+  useEffect(() => {
+    fetch('/api/products?type=produto_final')
+      .then((r) => r.json())
+      .then((json) => {
+        const data = Array.isArray(json) ? json : json.data ?? []
+        setAllProducts(data.map((p: { id: string; name: string; sku: string | null }) => ({
+          id: p.id, name: p.name, sku: p.sku,
         })))
       })
       .catch(() => {})
@@ -319,6 +366,56 @@ export default function ProductDetailPage({
       fetchProduct()
     } catch {
       alert('Erro ao remover variacao')
+    }
+  }
+
+  // Save mirror mapping
+  async function handleSaveMirror() {
+    if (!mirrorTargetProductId) return
+    setSavingMirror(true)
+    try {
+      // Find mirror company (is_mirror_stock=true) and real company
+      const mirrorCompany = companies.find((c) => c.is_mirror_stock)
+      const realCompany = companies.find((c) => !c.is_mirror_stock)
+      if (!mirrorCompany || !realCompany) {
+        alert('Necessario ter uma empresa real e uma empresa espelho cadastradas.')
+        return
+      }
+
+      const res = await fetch('/api/product-mirrors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_company_id: mirrorCompany.id,
+          source_product_id: id,
+          target_company_id: realCompany.id,
+          target_product_id: mirrorTargetProductId,
+          quantity_ratio: mirrorQuantityRatio,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Erro ao salvar espelho')
+      }
+      setMirrorTargetProductId('')
+      setMirrorQuantityRatio(1)
+      setMirrorSearch('')
+      fetchMirrors()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao salvar espelho')
+    } finally {
+      setSavingMirror(false)
+    }
+  }
+
+  // Remove mirror mapping
+  async function handleRemoveMirror(mirrorId: string) {
+    if (!window.confirm('Remover este vinculo de produto espelho?')) return
+    try {
+      await fetch(`/api/product-mirrors?id=${mirrorId}`, { method: 'DELETE' })
+      fetchMirrors()
+    } catch {
+      alert('Erro ao remover espelho')
     }
   }
 
@@ -504,6 +601,111 @@ export default function ProductDetailPage({
               </div>
             </CardContent>
           </Card>
+
+          {/* Produto Espelho (Mirror) */}
+          {productType === 'produto_final' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Link2 className="h-4 w-4" />
+                  Produto Vinculado (Espelho)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Vincule este produto a outro produto final. Quando um pedido da Hamecon der baixa, ambos os produtos terao o estoque reduzido na mesma quantidade.
+                </p>
+
+                {/* Existing mirrors */}
+                {mirrorMappings.length > 0 && (
+                  <div className="space-y-2">
+                    {mirrorMappings.map((m) => {
+                      const isSource = m.source_product_id === id
+                      const linkedProduct = isSource ? m.target_product : m.source_product
+                      const linkedCompany = isSource ? m.target_company : m.source_company
+                      return (
+                        <div key={m.id} className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Badge variant="secondary" className="border-0 bg-blue-100 text-blue-800">
+                                {isSource ? 'Espelho' : 'Real'}
+                              </Badge>
+                              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              <div>
+                                <span className="font-medium">{linkedProduct?.name ?? 'Produto removido'}</span>
+                                {linkedProduct?.sku && <span className="ml-2 text-xs text-muted-foreground">[{linkedProduct.sku}]</span>}
+                                <span className="ml-2 text-xs text-muted-foreground">({linkedCompany?.trade_name || linkedCompany?.name})</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {m.quantity_ratio !== 1 && (
+                              <Badge variant="outline" className="text-xs">Ratio: {m.quantity_ratio}x</Badge>
+                            )}
+                            <Button variant="ghost" size="sm" onClick={() => handleRemoveMirror(m.id)} className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Add new mirror */}
+                {mirrorMappings.length === 0 && (
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Produto Vinculado</Label>
+                      <Input
+                        placeholder="Buscar produto por nome ou SKU..."
+                        value={mirrorSearch}
+                        onChange={(e) => {
+                          setMirrorSearch(e.target.value)
+                          setMirrorTargetProductId('')
+                        }}
+                      />
+                      {mirrorSearch.length >= 2 && !mirrorTargetProductId && (
+                        <div className="max-h-40 overflow-y-auto rounded-md border">
+                          {allProducts
+                            .filter((p) => p.id !== id && (
+                              p.name.toLowerCase().includes(mirrorSearch.toLowerCase()) ||
+                              (p.sku && p.sku.toLowerCase().includes(mirrorSearch.toLowerCase()))
+                            ))
+                            .slice(0, 10)
+                            .map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0"
+                                onClick={() => {
+                                  setMirrorTargetProductId(p.id)
+                                  setMirrorSearch(p.sku ? `[${p.sku}] ${p.name}` : p.name)
+                                }}
+                              >
+                                {p.sku && <span className="font-mono text-xs text-muted-foreground mr-2">[{p.sku}]</span>}
+                                {p.name}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-end gap-3">
+                      <div className="space-y-2 w-32">
+                        <Label className="text-xs">Proporcao (Qtd)</Label>
+                        <Input type="number" step="0.01" min="0.01" value={mirrorQuantityRatio}
+                          onChange={(e) => setMirrorQuantityRatio(Number(e.target.value))} />
+                      </div>
+                      <Button onClick={handleSaveMirror} disabled={savingMirror || !mirrorTargetProductId} size="sm">
+                        {savingMirror ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Link2 className="mr-1 h-3 w-3" />}
+                        Vincular
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Status */}
           <Card>

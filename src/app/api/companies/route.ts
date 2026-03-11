@@ -24,6 +24,54 @@ export async function GET() {
   }
 }
 
+// PATCH /api/companies?id=xxx — update an existing company
+export async function PATCH(request: NextRequest) {
+  try {
+    const id = request.nextUrl.searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ error: 'Query param id e obrigatorio.' }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const now = new Date().toISOString()
+
+    // Build update object from allowed fields
+    const allowedFields = [
+      'name', 'trade_name', 'document', 'state_reg', 'municipal_reg',
+      'email', 'phone', 'cep', 'street', 'number', 'complement',
+      'neighborhood', 'city', 'state', 'is_mirror_stock',
+    ] as const
+
+    const update: Record<string, unknown> = { updated_at: now }
+    for (const field of allowedFields) {
+      if (field in body) {
+        if (field === 'document') {
+          update[field] = typeof body[field] === 'string' ? body[field].replace(/\D/g, '') : body[field]
+        } else {
+          update[field] = body[field] === '' ? null : body[field]
+        }
+      }
+    }
+
+    const { data, error } = await db()
+      .from('erp_companies')
+      .update(update)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('PATCH /api/companies error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ data })
+  } catch (err) {
+    console.error('PATCH /api/companies unexpected error:', err)
+    return NextResponse.json({ error: 'Corpo da requisicao invalido.' }, { status: 400 })
+  }
+}
+
 // POST /api/companies — create a new company
 export async function POST(request: NextRequest) {
   try {

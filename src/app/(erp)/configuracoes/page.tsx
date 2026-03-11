@@ -297,6 +297,13 @@ export default function ConfiguracoesPage() {
   const [submittingCompany, setSubmittingCompany] = useState(false)
   const [companyError, setCompanyError] = useState('')
 
+  // Edit company state
+  const [editCompanyDialogOpen, setEditCompanyDialogOpen] = useState(false)
+  const [editCompanyForm, setEditCompanyForm] = useState<CompanyFormData>(emptyCompanyForm)
+  const [editCompanyId, setEditCompanyId] = useState<string | null>(null)
+  const [submittingEditCompany, setSubmittingEditCompany] = useState(false)
+  const [editCompanyError, setEditCompanyError] = useState('')
+
   // Users state
   const [users, setUsers] = useState<ErpUserProfile[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
@@ -589,6 +596,80 @@ export default function ConfiguracoesPage() {
       setCompanyError('Erro de rede ao criar empresa.')
     } finally {
       setSubmittingCompany(false)
+    }
+  }
+
+  // ------- Edit company handlers -------
+  function openEditCompany(company: ErpCompany) {
+    setEditCompanyId(company.id)
+    setEditCompanyForm({
+      name: company.name,
+      trade_name: company.trade_name ?? '',
+      document: company.document,
+      state_reg: company.state_reg ?? '',
+      municipal_reg: company.municipal_reg ?? '',
+      email: company.email ?? '',
+      phone: company.phone ?? '',
+      cep: company.cep ?? '',
+      street: company.street ?? '',
+      number: company.number ?? '',
+      complement: company.complement ?? '',
+      neighborhood: company.neighborhood ?? '',
+      city: company.city ?? '',
+      state: company.state ?? '',
+    })
+    setEditCompanyError('')
+    setEditCompanyDialogOpen(true)
+  }
+
+  function handleEditCompanyFieldChange(field: keyof CompanyFormData, value: string) {
+    setEditCompanyForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  async function handleEditCompanySubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setEditCompanyError('')
+
+    if (!editCompanyForm.name.trim()) {
+      setEditCompanyError('Razao Social e obrigatoria.')
+      return
+    }
+
+    setSubmittingEditCompany(true)
+    try {
+      const res = await fetch(`/api/companies?id=${editCompanyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editCompanyForm.name.trim(),
+          trade_name: editCompanyForm.trade_name.trim() || null,
+          document: editCompanyForm.document.trim(),
+          state_reg: editCompanyForm.state_reg.trim() || null,
+          municipal_reg: editCompanyForm.municipal_reg.trim() || null,
+          email: editCompanyForm.email.trim() || null,
+          phone: editCompanyForm.phone.trim() || null,
+          cep: editCompanyForm.cep.trim() || null,
+          street: editCompanyForm.street.trim() || null,
+          number: editCompanyForm.number.trim() || null,
+          complement: editCompanyForm.complement.trim() || null,
+          neighborhood: editCompanyForm.neighborhood.trim() || null,
+          city: editCompanyForm.city.trim() || null,
+          state: editCompanyForm.state.trim() || null,
+        }),
+      })
+
+      if (!res.ok) {
+        const json = await res.json()
+        setEditCompanyError(json.error ?? 'Erro ao atualizar empresa.')
+        return
+      }
+
+      setEditCompanyDialogOpen(false)
+      await fetchCompanies()
+    } catch {
+      setEditCompanyError('Erro de rede ao atualizar empresa.')
+    } finally {
+      setSubmittingEditCompany(false)
     }
   }
 
@@ -1158,7 +1239,9 @@ export default function ConfiguracoesPage() {
                           {company.name}
                         </CardDescription>
                       </div>
-                      <Building2 className="h-5 w-5 text-muted-foreground" />
+                      <Button variant="ghost" size="sm" onClick={() => openEditCompany(company)} className="h-8 w-8 p-0 text-muted-foreground hover:text-primary">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -2126,6 +2209,114 @@ export default function ConfiguracoesPage() {
               <Button type="submit" disabled={submittingCompany}>
                 {submittingCompany && <Loader2 className="h-4 w-4 animate-spin" />}
                 Salvar Empresa
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* =============================================================== */}
+      {/* Dialog: Editar Empresa                                           */}
+      {/* =============================================================== */}
+      <Dialog open={editCompanyDialogOpen} onOpenChange={setEditCompanyDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Empresa</DialogTitle>
+            <DialogDescription>
+              Atualize os dados da empresa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleEditCompanySubmit}>
+            <ScrollArea className="max-h-[60vh] pr-4">
+              <div className="space-y-6 py-2">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-muted-foreground">Dados Principais</h4>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Razao Social *</Label>
+                      <Input value={editCompanyForm.name} onChange={(e) => handleEditCompanyFieldChange('name', e.target.value)} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nome Fantasia</Label>
+                      <Input value={editCompanyForm.trade_name} onChange={(e) => handleEditCompanyFieldChange('trade_name', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>CNPJ</Label>
+                      <Input value={editCompanyForm.document} onChange={(e) => handleEditCompanyFieldChange('document', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Inscricao Estadual</Label>
+                      <Input value={editCompanyForm.state_reg} onChange={(e) => handleEditCompanyFieldChange('state_reg', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Inscricao Municipal</Label>
+                      <Input value={editCompanyForm.municipal_reg} onChange={(e) => handleEditCompanyFieldChange('municipal_reg', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-muted-foreground">Contato</h4>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>E-mail</Label>
+                      <Input type="email" value={editCompanyForm.email} onChange={(e) => handleEditCompanyFieldChange('email', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Telefone</Label>
+                      <Input value={editCompanyForm.phone} onChange={(e) => handleEditCompanyFieldChange('phone', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-muted-foreground">Endereco</h4>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>CEP</Label>
+                      <Input value={editCompanyForm.cep} onChange={(e) => handleEditCompanyFieldChange('cep', e.target.value)} />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Rua</Label>
+                      <Input value={editCompanyForm.street} onChange={(e) => handleEditCompanyFieldChange('street', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Numero</Label>
+                      <Input value={editCompanyForm.number} onChange={(e) => handleEditCompanyFieldChange('number', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Complemento</Label>
+                      <Input value={editCompanyForm.complement} onChange={(e) => handleEditCompanyFieldChange('complement', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Bairro</Label>
+                      <Input value={editCompanyForm.neighborhood} onChange={(e) => handleEditCompanyFieldChange('neighborhood', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Cidade</Label>
+                      <Input value={editCompanyForm.city} onChange={(e) => handleEditCompanyFieldChange('city', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>UF</Label>
+                      <Input value={editCompanyForm.state} onChange={(e) => handleEditCompanyFieldChange('state', e.target.value)} maxLength={2} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+
+            {editCompanyError && (
+              <p className="mt-2 text-sm text-destructive">{editCompanyError}</p>
+            )}
+
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setEditCompanyDialogOpen(false)} disabled={submittingEditCompany}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={submittingEditCompany}>
+                {submittingEditCompany && <Loader2 className="h-4 w-4 animate-spin" />}
+                Salvar Alteracoes
               </Button>
             </DialogFooter>
           </form>
